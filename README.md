@@ -1,135 +1,74 @@
-# MemoryNote 📝
+# NotebookME 🧠
 
-An easy-to-use note-taking application with AI assistance - a simpler alternative to NotebookLM and Obsidian.
+**Your Self-Hosted AI Second Brain.**
+A private, powerful, and intelligent note-taking application designed to be a simpler, faster alternative to NotebookLM and Obsidian.
 
-## Features
+![UI Screenshot](ui-screenshot.png)
 
-- **Easy Note-Taking**: Create and organize notes in notebooks
-- **Markdown Support**: Full markdown editing with live preview
-- **AI Assistant**: Integrated AI (GLM-4.7) for:
-  - Chat about your notes
-  - Summarize notes
-  - Improve writing
-  - Generate ideas
-- **100% Local**: All data stored in browser's IndexedDB
-- **PWA Ready**: Install as a Progressive Web App for offline use
-- **Clean UI**: Simple, intuitive interface
+## ✨ Features
 
-## Tech Stack
+### 📝 Smart Note-Taking
+-   **Markdown Support**: Full rich-text editing with automatic markdown formatting.
+-   **Distraction-Free**: Clean, minimalist interface focused on your thoughts.
+-   **Quick Capture**: Capture ideas instantly without losing flow.
 
-- **Vue.js 3** - Progressive JavaScript framework
-- **Vite** - Fast build tool
-- **IndexedDB** - Local browser storage
-- **Marked** - Markdown parser
-- **Highlight.js** - Code syntax highlighting
-- **Z.AI API** - AI powered by GLM-4.7
+### 🤖 AI Integration (The "Exocortex")
+Your personal AI assistant is woven into every note:
+-   **Chat with Context**: The AI knows your notes. Ask questions, find connections, or summarize entire notebooks.
+-   **Smart Action Bar**:
+    -   **➕ Append**: Add AI ideas to the end of your note for brainstorming.
+    -   **📍 Insert**: Seamlessly expand on points right where your cursor is.
+    -   **🔄 Replace**: Rewrite sections or entire notes to improve clarity/tone.
 
-## Getting Started
+![Note Editor](note-editor-screenshot.png)
+
+### 🛡️ Privacy & Safety
+-   **100% Self-Hosted**: Your data lives on **your** device/server (SQLite). No vendor lock-in.
+-   **Version Control**: "Time Travel" for your notes. Every AI edit creates a secure checkpoint, so you can always revert changes.
+-   **Ownership**: You own the code (`index.html`, `server.js`) and the data (`data/memorynote.db`).
+
+## 🚀 Getting Started
+
+### Prerequisites
+-   Node.js (v18+)
+-   NPM
 
 ### Installation
 
-```bash
-cd memory-note-pwa
-npm install
-```
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/rajpootathar/NoteBookMe.git
+    cd NoteBookMe
+    ```
 
-### Development
+2.  **Install dependencies**
+    ```bash
+    npm install
+    ```
 
-```bash
-npm run dev
-```
+3.  **Configure Environment**
+    Copy the example env file and set your secrets:
+    ```bash
+    cp .env.example .env
+    ```
+    *Edit `.env` to set your `USER_PASSWORD` and `JWT_SECRET`.*
 
-Open http://localhost:5173 in your browser.
+4.  **Run the Server**
+    ```bash
+    npm start
+    ```
+    Access your Second Brain at `http://localhost:3000`.
 
-### Build for Production
+## 🛠️ Tech Stack
+-   **Frontend**: Vue 3 + Vite (PWA)
+-   **Backend**: Express + Better-SQLite3
+-   **Storage**: Local SQLite Database (`data/memorynote.db`)
+-   **AI**: Z.AI (GLM-4.7)
 
-```bash
-npm run build
-```
+## 📸 Screenshots
 
-The built files will be in the `dist` directory.
+### Intelligent Chat
+![Quick Capture](quick-capture-screenshot.png)
 
-### Preview Production Build
-
-```bash
-npm run preview
-```
-
-## Usage
-
-1. **Create a Notebook**: Click "📓 New Notebook" in the sidebar
-2. **Create Notes**: Click "➕ New Note" to create a note
-3. **Edit Notes**: Click on any note to open the editor
-4. **Use AI**: Click the 🤖 button in the editor to open the AI assistant
-5. **Organize**: Use the sidebar to navigate between notebooks
-
-## AI Features
-
-The AI assistant can help you with:
-
-- **Chat**: Ask questions about your notes
-- **Summarize**: Get quick summaries of your notes
-- **Improve**: Get suggestions to improve your writing
-- **Ideas**: Brainstorm ideas based on your content
-
-## Project Structure
-
-```
-memory-note-pwa/
-├── src/
-│   ├── components/
-│   │   ├── views/
-│   │   │   ├── NoteEditor.vue    # Note editing interface
-│   │   │   └── NotebookList.vue  # Notebook and note list
-│   │   ├── Sidebar.vue           # Navigation sidebar
-│   │   ├── MarkdownEditor.vue    # Markdown editor with preview
-│   │   └── AIChat.vue            # AI chat interface
-│   ├── services/
-│   │   ├── storage.js            # IndexedDB storage layer
-│   │   └── ai.js                 # Z.AI API integration
-│   ├── stores/
-│   │   └── useStore.js           # Vue state management
-│   ├── App.vue                   # Main app component
-│   └── main.js                   # App entry point
-├── public/
-│   └── favicon.svg               # App icon
-├── index.html                    # HTML template
-├── vite.config.js                # Vite configuration
-└── package.json                  # Dependencies
-```
-
-## Configuration
-
-### AI API Key
-
-The Z.AI API key is configured in `src/services/ai.js`. To use your own key:
-
-1. Open `src/services/ai.js`
-2. Replace the `API_KEY` constant with your key
-3. Adjust the `API_BASE` if needed
-
-```javascript
-const API_KEY = 'your-api-key-here';
-```
-
-## Browser Support
-
-- Chrome/Edge (recommended)
-- Firefox
-- Safari
-
-## PWA Installation
-
-1. Open the app in a supported browser
-2. Click the install icon in the address bar
-3. Follow the prompts to install
-
-The app will work offline after installation.
-
-## License
-
-MIT
-
-## Contributing
-
-Contributions are welcome! Feel free to open issues or submit pull requests.
+## 📄 License
+MIT License. Built with ❤️ for the open internet.
