@@ -15,6 +15,7 @@ A private, powerful, and intelligent note-taking application designed to be a si
 ### 🤖 AI Integration (The "Exocortex")
 Your personal AI assistant is woven into every note:
 -   **Chat with Context**: The AI knows your notes. Ask questions, find connections, or summarize entire notebooks.
+-   **RAG-Powered Search**: Semantic search across all your notes using local embeddings.
 -   **Smart Action Bar**:
     -   **➕ Append**: Add AI ideas to the end of your note for brainstorming.
     -   **📍 Insert**: Seamlessly expand on points right where your cursor is.
@@ -22,10 +23,17 @@ Your personal AI assistant is woven into every note:
 
 ![Note Editor](note-editor-screenshot.png)
 
+### 🕐 Version History
+-   **Google Docs-style Auto-save**: Automatic versioning based on time and idle detection.
+-   **Preview & Restore**: View any previous version and restore with one click.
+-   **AI Edit Checkpoints**: Every AI modification creates a secure checkpoint.
+
+![Version History](history-screenshot.png)
+
 ### 🛡️ Privacy & Safety
--   **100% Self-Hosted**: Your data lives on **your** device/server (SQLite). No vendor lock-in.
--   **Version Control**: "Time Travel" for your notes. Every AI edit creates a secure checkpoint, so you can always revert changes.
--   **Ownership**: You own the code (`index.html`, `server.js`) and the data (`data/memorynote.db`).
+-   **100% Self-Hosted**: Your data lives on **your** device/server. No vendor lock-in.
+-   **Local Embeddings**: Privacy-first semantic search using all-MiniLM-L6-v2.
+-   **Ownership**: You own the code and the data (`data/notebookme.lance`).
 
 ## 🚀 Getting Started
 
@@ -68,8 +76,14 @@ Your personal AI assistant is woven into every note:
 
 ## 📸 Screenshots
 
-### Intelligent Chat
-![Quick Capture](quick-capture-screenshot.png)
+### AI Chat Interface
+![AI Chat](quick-capture-screenshot.png)
+
+### AI Assistant Panel
+![AI Assistant](ai-chat-screenshot.png)
+
+### Context Menu
+![Context Menu](context-menu-screenshot.png)
 
 ## 📄 License
 
