@@ -1,35 +1,37 @@
-const API_BASE = import.meta.env.VITE_AI_API_URL || 'https://api.z.ai/api/coding/paas/v4';
-const API_KEY = import.meta.env.VITE_AI_API_KEY;
+// AI service - uses backend proxy for secure API key handling
+const getAuthToken = () => localStorage.getItem('auth_token');
 
 export const aiService = {
   async chat(messages, options = {}) {
-    if (!API_KEY) {
-      throw new Error('AI API Key is missing. Please check your .env file.');
-    }
-
     try {
-      const response = await fetch(`${API_BASE}/chat/completions`, {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('Not authenticated. Please log in.');
+      }
+
+      const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          model: options.model || import.meta.env.VITE_AI_MODEL_NAME || 'GLM-4.7',
           messages: messages,
-          temperature: options.temperature ?? 0.7,
-          max_tokens: options.maxTokens ?? 2000,
-          stream: options.stream ?? false
+          options: {
+            temperature: options.temperature ?? 0.7,
+            maxTokens: options.maxTokens ?? 2000,
+            model: options.model
+          }
         })
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`AI API error: ${response.status} - ${error}`);
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(error.error || `AI API error: ${response.status}`);
       }
 
       const data = await response.json();
-      return data.choices[0].message.content;
+      return data.content;
     } catch (error) {
       console.error('AI service error:', error);
       throw error;

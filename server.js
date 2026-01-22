@@ -318,6 +318,60 @@ app.post('/api/ai/rag', authMiddleware, async (req, res) => {
   }
 });
 
+// ============ AI Proxy API ============
+const AI_API_URL = process.env.AI_API_URL || process.env.VITE_AI_API_URL;
+const AI_API_KEY = process.env.AI_API_KEY || process.env.VITE_AI_API_KEY;
+const AI_MODEL_NAME = process.env.AI_MODEL_NAME || process.env.VITE_AI_MODEL_NAME || 'gpt-3.5-turbo';
+
+app.post('/api/ai/chat', authMiddleware, async (req, res) => {
+  try {
+    if (!AI_API_URL || !AI_API_KEY) {
+      return res.status(500).json({
+        error: 'AI not configured. Set AI_API_URL and AI_API_KEY in .env'
+      });
+    }
+
+    const { messages, options = {} } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'Messages array is required' });
+    }
+
+    const response = await fetch(`${AI_API_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: options.model || AI_MODEL_NAME,
+        messages: messages,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.maxTokens ?? 2000,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('AI API error:', response.status, errorText);
+      return res.status(response.status).json({
+        error: `AI API error: ${response.status}`,
+        details: errorText
+      });
+    }
+
+    const data = await response.json();
+    res.json({
+      content: data.choices[0].message.content,
+      usage: data.usage
+    });
+  } catch (error) {
+    console.error('AI proxy error:', error);
+    res.status(500).json({ error: 'AI request failed', details: error.message });
+  }
+});
+
 // ============ Export API ============
 app.get('/api/export', authMiddleware, async (req, res) => {
   try {
