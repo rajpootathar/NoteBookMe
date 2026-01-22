@@ -27,8 +27,8 @@
             <path d="M12 16v-4M12 8h.01"/>
           </svg>
         </div>
-        <h3>Ask about your sources</h3>
-        <p>Get insights, summaries, and answers from your notes</p>
+        <h3>Chat about this note</h3>
+        <p>Get insights, summaries, and answers from your content</p>
       </div>
 
       <!-- Messages list -->
@@ -102,7 +102,7 @@
             <span></span>
             <span></span>
           </div>
-          <span class="thinking-text">Analyzing your sources...</span>
+          <span class="thinking-text">Thinking...</span>
         </div>
       </div>
     </div>
@@ -181,7 +181,7 @@
           <input
             v-model="userInput"
             type="text"
-            placeholder="Ask a question about your sources..."
+            placeholder="Ask about this note..."
             :disabled="isLoading"
             ref="inputRef"
           >
@@ -200,6 +200,7 @@
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue';
 import { aiService } from '../services/ai.js';
+import { ragService } from '../services/ragService.js';
 import { storage } from '../services/storage.js';
 
 const props = defineProps({
@@ -370,7 +371,7 @@ async function sendMessage() {
 
   messages.value.push({ role: 'user', content: message });
   await saveChatHistory(); // Save user message
-  
+
   userInput.value = '';
   isLoading.value = true;
 
@@ -381,11 +382,21 @@ async function sendMessage() {
     let sources = [];
 
     if (props.noteContent) {
-      response = await aiService.chatWithNote(props.noteContent, message);
-      sources = ['Current note'];
+      // Use RAG to find related notes and enhance the response
+      const ragResult = await ragService.askAboutNote(
+        props.noteId,
+        props.noteContent,
+        message
+      );
+      response = ragResult.content;
+      sources = ragResult.hasContext
+        ? ['Current note', ...ragResult.sources.map(s => s.noteTitle)]
+        : ['Current note'];
     } else if (props.notes.length > 0) {
-      response = await aiService.askQuestion(props.notes, message);
-      sources = props.notes.slice(0, 3).map(n => n.title || 'Untitled');
+      // Use RAG for multi-note context
+      const result = await ragService.askQuestion(message, { topK: 5 });
+      response = result.content;
+      sources = result.sources.map(s => s.noteTitle);
     } else {
       response = await aiService.chat([
         { role: 'system', content: 'You are a helpful assistant.' },
@@ -400,6 +411,7 @@ async function sendMessage() {
     });
     await saveChatHistory(); // Save assistant response
   } catch (error) {
+    console.error('Chat error:', error);
     messages.value.push({
       role: 'assistant',
       content: 'Sorry, I encountered an error. Please try again.'
@@ -436,6 +448,7 @@ defineExpose({ clearChat });
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   background: var(--color-bg-primary);
   border-left: 1px solid var(--color-border-light);
 }
@@ -497,6 +510,7 @@ defineExpose({ clearChat });
 /* Messages area */
 .chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-5);
   display: flex;

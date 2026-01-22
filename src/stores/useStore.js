@@ -90,9 +90,15 @@ export const useStore = () => {
     }
   }
 
-  async function createNote(notebookId, title = 'Untitled', content = '') {
+  async function createNote(noteData) {
     try {
-      const note = await storage.createNote({ notebookId, title, content });
+      // Accept either object or legacy arguments
+      const data = typeof noteData === 'object' ? noteData : {
+        notebookId: noteData,
+        title: arguments[1] || 'Untitled',
+        content: arguments[2] || ''
+      };
+      const note = await storage.createNote(data);
       state.notes.push(note);
       return note;
     } catch (error) {

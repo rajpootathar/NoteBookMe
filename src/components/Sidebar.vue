@@ -55,18 +55,19 @@
         </svg>
         New note
       </button>
-      <div class="footer-links">
-        <button class="footer-link" title="Keyboard shortcuts">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="4" width="20" height="16" rx="2"/>
-            <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M6 16h12"/>
+      <div class="footer-actions">
+        <button class="footer-btn" @click="downloadExport" title="Export All Data">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
         </button>
-        <button class="footer-link" title="Help & Support">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-            <path d="M12 17h.01"/>
+        <button class="footer-btn logout-btn" @click="$emit('logout')" title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
           </svg>
         </button>
       </div>
@@ -78,7 +79,7 @@
 import { computed, onMounted } from 'vue';
 import { useStore } from '../stores/useStore.js';
 
-const emit = defineEmits(['selectNotebook', 'addNotebook']);
+const emit = defineEmits(['selectNotebook', 'addNotebook', 'logout']);
 
 const store = useStore();
 
@@ -119,6 +120,35 @@ async function deleteNotebook(notebookId) {
       console.error('Failed to delete notebook:', error);
     }
   }
+}
+
+
+async function downloadExport() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+        const response = await fetch('/api/export', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) throw new Error('Export failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `notebookme-export-${new Date().toISOString().split('T')[0]}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('Export error:', error);
+        alert('Failed to export data');
+    }
 }
 
 onMounted(async () => {
@@ -212,13 +242,8 @@ onMounted(async () => {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.5);
   transition: all var(--transition-fast);
-  opacity: 0;
-}
-
-.nav-section-header:hover .add-notebook-btn {
-  opacity: 1;
 }
 
 .add-notebook-btn:hover {
@@ -338,6 +363,43 @@ onMounted(async () => {
 
 .sidebar-footer {
   padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.footer-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.footer-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.footer-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+}
+
+.footer-btn.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
 }
 
 .new-btn {
@@ -396,44 +458,4 @@ onMounted(async () => {
   transform: rotate(90deg);
 }
 
-.footer-links {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.footer-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.4);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.footer-link:hover {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.3);
-  color: #a5b4fc;
-  transform: translateY(-2px);
-}
-
-.footer-link:active {
-  transform: translateY(0);
-}
-
-.footer-link:first-child:hover {
-  background: rgba(245, 158, 11, 0.15);
-  border-color: rgba(245, 158, 11, 0.3);
-  color: #fbbf24;
-}
 </style>

@@ -61,9 +61,10 @@ Your personal AI assistant is woven into every note:
 
 ## 🛠️ Tech Stack
 -   **Frontend**: Vue 3 + Vite (PWA)
--   **Backend**: Express + Better-SQLite3
--   **Storage**: Local SQLite Database (`data/memorynote.db`)
--   **AI**: Z.AI (GLM-4.7)
+-   **Backend**: Express.js
+-   **Database**: LanceDB (vector database with semantic search)
+-   **Embeddings**: all-MiniLM-L6-v2 (local, privacy-first)
+-   **AI**: OpenAI-compatible API (configurable)
 
 ## 📸 Screenshots
 
@@ -71,4 +72,11 @@ Your personal AI assistant is woven into every note:
 ![Quick Capture](quick-capture-screenshot.png)
 
 ## 📄 License
-MIT License. Built with ❤️ for the open internet.
+
+This project is licensed under the [Elastic License 2.0 (ELv2)](LICENSE).
+
+You are free to use, modify, and distribute this software, with the following limitations:
+- You may not provide this software as a hosted/managed service to third parties
+- You may not remove or alter licensing notices
+
+Built with ❤️ for the open internet.

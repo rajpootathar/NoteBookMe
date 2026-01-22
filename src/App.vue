@@ -1,18 +1,21 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import Sidebar from './components/Sidebar.vue';
-import NotebookList from './components/views/NotebookList.vue';
-import NoteEditor from './components/views/NoteEditor.vue';
+import NotebookView from './components/NotebookView.vue';
 import QuickCapture from './components/QuickCapture.vue';
 import LoginPage from './components/LoginPage.vue';
 import { authService } from './services/authService';
+import { useStore } from './stores/useStore.js';
 
-const currentNoteId = ref(null);
+const store = useStore();
 const currentNotebookId = ref(null);
 const quickCaptureRef = ref(null);
 const mobileMenuOpen = ref(false);
 const isAuthenticated = ref(false);
 const isCheckingAuth = ref(true);
+const showNewNotebookModal = ref(false);
+const newNotebookName = ref('');
+const newNotebookEmoji = ref('📓');
 
 onMounted(async () => {
   isAuthenticated.value = authService.isAuthenticated();
@@ -28,19 +31,9 @@ function handleLogout() {
   isAuthenticated.value = false;
 }
 
-function openNote(noteId) {
-  currentNoteId.value = noteId;
-  mobileMenuOpen.value = false;
-}
-
 function selectNotebook(notebookId) {
   currentNotebookId.value = notebookId;
-  currentNoteId.value = null;
   mobileMenuOpen.value = false;
-}
-
-function goBack() {
-  currentNoteId.value = null;
 }
 
 function toggleMobileMenu() {
@@ -48,7 +41,28 @@ function toggleMobileMenu() {
 }
 
 function onNoteCreated(note) {
-  openNote(note.id);
+  // Note created via quick capture
+}
+
+function handleAddNotebook() {
+  showNewNotebookModal.value = true;
+}
+
+async function createNotebook() {
+  if (!newNotebookName.value.trim()) return;
+
+  await store.createNotebook(newNotebookName.value, newNotebookEmoji.value);
+  await store.loadNotebooks();
+
+  newNotebookName.value = '';
+  newNotebookEmoji.value = '📓';
+  showNewNotebookModal.value = false;
+}
+
+function closeNotebookModal() {
+  showNewNotebookModal.value = false;
+  newNotebookName.value = '';
+  newNotebookEmoji.value = '📓';
 }
 
 // Expose quick capture to window for easy access
@@ -64,43 +78,63 @@ if (typeof window !== 'undefined') {
   <div v-if="isCheckingAuth" class="auth-loading">
     <div class="loading-spinner-large"></div>
   </div>
-  
+
   <!-- Login page if not authenticated -->
   <LoginPage v-else-if="!isAuthenticated" @loginSuccess="handleLoginSuccess" />
-  
-  <!-- Main app when authenticated -->
+
+  <!-- Main app when authenticated - Sidebar + NotebookView layout -->
   <div v-else id="app" :class="{ 'mobile-menu-open': mobileMenuOpen }">
-    <!-- Sync status indicator -->
-    <div class="sync-indicator" :class="syncStatus">
-      <span v-if="syncStatus === 'syncing'" class="sync-spinner"></span>
-      <span v-else-if="syncStatus === 'success'">✓</span>
-      <span v-else-if="syncStatus === 'error'">!</span>
-    </div>
-    
-    <!-- Logout button -->
-    <button class="logout-btn" @click="handleLogout" title="Sign out">
-      ⏻
-    </button>
-    
-    <Sidebar @selectNotebook="selectNotebook" :class="{ 'mobile-visible': mobileMenuOpen }" />
-    <button class="mobile-menu-toggle" @click="toggleMobileMenu" v-if="!currentNoteId">
+    <Sidebar
+      @selectNotebook="selectNotebook"
+      @addNotebook="handleAddNotebook"
+      @logout="handleLogout"
+      :class="{ 'mobile-visible': mobileMenuOpen }"
+    />
+    <button class="mobile-menu-toggle" @click="toggleMobileMenu">
       <span v-if="!mobileMenuOpen">☰</span>
       <span v-else>×</span>
     </button>
     <div class="mobile-overlay" v-if="mobileMenuOpen" @click="mobileMenuOpen = false"></div>
     <main class="main-content">
-      <NoteEditor
-        v-if="currentNoteId"
-        :noteId="currentNoteId"
-        @goBack="goBack"
-      />
-      <NotebookList
-        v-else
-        :notebookId="currentNotebookId"
-        @openNote="openNote"
-      />
+      <NotebookView :notebookId="currentNotebookId" />
     </main>
     <QuickCapture ref="quickCaptureRef" @noteCreated="onNoteCreated" />
+
+    <!-- New Notebook Modal -->
+    <div v-if="showNewNotebookModal" class="modal-overlay" @click.self="closeNotebookModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Create notebook</h3>
+          <button class="modal-close" @click="closeNotebookModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="emoji-picker">
+            <button
+              v-for="emoji in ['📓', '📚', '📝', '💡', '🎯', '🚀', '💼', '🔬', '📊', '🎨', '💻', '🧠']"
+              :key="emoji"
+              :class="['emoji-btn', { selected: newNotebookEmoji === emoji }]"
+              @click="newNotebookEmoji = emoji"
+            >
+              {{ emoji }}
+            </button>
+          </div>
+          <input
+            v-model="newNotebookName"
+            type="text"
+            placeholder="Notebook name"
+            class="modal-input"
+            @keyup.enter="createNotebook"
+            autofocus
+          />
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" @click="closeNotebookModal">Cancel</button>
+          <button class="btn-create" @click="createNotebook" :disabled="!newNotebookName.trim()">
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -436,5 +470,152 @@ button:focus-visible {
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-card {
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 400px;
+  box-shadow: var(--shadow-2xl);
+  animation: scaleIn 0.2s ease;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--color-text-primary);
+}
+
+.modal-body {
+  padding: var(--space-5);
+}
+
+.emoji-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.emoji-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-secondary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.emoji-btn:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.emoji-btn.selected {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.modal-input {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.modal-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.btn-cancel {
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-cancel:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.btn-create {
+  padding: var(--space-2) var(--space-4);
+  background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-create:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.btn-create:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

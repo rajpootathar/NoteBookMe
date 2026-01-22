@@ -102,13 +102,34 @@
         v-model="localContent"
         @input="onInput"
         @keydown.tab.prevent="onTab"
+        @scroll="onTextareaScroll"
         placeholder="Start writing your thoughts... Markdown is supported"
         class="editor-textarea"
       ></textarea>
+
+      <!-- Simple divider with sync toggle -->
+      <div v-if="activeView === 'split'" class="split-divider">
+        <button
+          :class="['sync-scroll-btn', { active: syncScroll }]"
+          @click="toggleSyncAndAlign"
+          :title="syncScroll ? 'Sync scroll ON' : 'Sync scroll OFF'"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path v-if="syncScroll" d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path v-if="syncScroll" d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            <path v-if="!syncScroll" d="M18.84 5.16a4.5 4.5 0 0 0-6.36 0l-2.83 2.83"/>
+            <path v-if="!syncScroll" d="M5.16 18.84a4.5 4.5 0 0 0 6.36 0l2.83-2.83"/>
+            <line v-if="!syncScroll" x1="2" y1="2" x2="22" y2="22"/>
+          </svg>
+        </button>
+      </div>
+
       <div
         v-show="activeView !== 'write'"
+        ref="previewPane"
         class="editor-preview"
         v-html="renderedMarkdown"
+        @scroll="onPreviewScroll"
       ></div>
     </div>
   </div>
@@ -144,11 +165,91 @@ const emit = defineEmits(['update:modelValue']);
 
 const localContent = ref(props.modelValue);
 const textarea = ref(null);
+const previewPane = ref(null);
 const activeView = ref('write'); // 'write', 'preview', or 'split'
+const syncScroll = ref(true); // Sync scroll enabled by default
 
 const renderedMarkdown = computed(() => {
   return marked(localContent.value || '');
 });
+
+// Simple percentage-based sync scroll
+let scrollSource = null;
+let rafId = null;
+
+function onTextareaScroll() {
+  if (!syncScroll.value || activeView.value !== 'split') return;
+  if (scrollSource === 'preview') return;
+
+  scrollSource = 'textarea';
+
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(() => {
+    const ta = textarea.value;
+    const preview = previewPane.value;
+    if (!ta || !preview) return;
+
+    const taMaxScroll = ta.scrollHeight - ta.clientHeight;
+    if (taMaxScroll <= 0) return;
+
+    const scrollPercent = ta.scrollTop / taMaxScroll;
+    const previewMaxScroll = preview.scrollHeight - preview.clientHeight;
+
+    if (previewMaxScroll > 0) {
+      preview.scrollTop = scrollPercent * previewMaxScroll;
+    }
+
+    setTimeout(() => { scrollSource = null; }, 20);
+  });
+}
+
+function onPreviewScroll() {
+  if (!syncScroll.value || activeView.value !== 'split') return;
+  if (scrollSource === 'textarea') return;
+
+  scrollSource = 'preview';
+
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(() => {
+    const ta = textarea.value;
+    const preview = previewPane.value;
+    if (!ta || !preview) return;
+
+    const previewMaxScroll = preview.scrollHeight - preview.clientHeight;
+    if (previewMaxScroll <= 0) return;
+
+    const scrollPercent = preview.scrollTop / previewMaxScroll;
+    const taMaxScroll = ta.scrollHeight - ta.clientHeight;
+
+    if (taMaxScroll > 0) {
+      ta.scrollTop = scrollPercent * taMaxScroll;
+    }
+
+    setTimeout(() => { scrollSource = null; }, 20);
+  });
+}
+
+function toggleSyncAndAlign() {
+  syncScroll.value = !syncScroll.value;
+
+  if (syncScroll.value) {
+    // Align preview to textarea position
+    requestAnimationFrame(() => {
+      const ta = textarea.value;
+      const preview = previewPane.value;
+      if (!ta || !preview) return;
+
+      const taMaxScroll = ta.scrollHeight - ta.clientHeight;
+      if (taMaxScroll > 0) {
+        const scrollPercent = ta.scrollTop / taMaxScroll;
+        const previewMaxScroll = preview.scrollHeight - preview.clientHeight;
+        if (previewMaxScroll > 0) {
+          preview.scrollTop = scrollPercent * previewMaxScroll;
+        }
+      }
+    });
+  }
+}
 
 function onInput() {
   emit('update:modelValue', localContent.value);
@@ -290,6 +391,8 @@ watch(() => props.modelValue, (newValue) => {
 }
 
 .toolbar-right {
+  display: flex;
+  align-items: center;
   margin-left: auto;
 }
 
@@ -343,30 +446,82 @@ watch(() => props.modelValue, (newValue) => {
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
+/* Split Divider */
+.split-divider {
+  position: relative;
+  width: 1px;
+  flex-shrink: 0;
+  background: var(--color-border-light);
+}
+
+/* Sync Scroll Toggle */
+.sync-scroll-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: var(--color-text-tertiary);
+}
+
+.sync-scroll-btn:hover {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.sync-scroll-btn.active {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.sync-scroll-btn.active:hover {
+  background: rgba(16, 185, 129, 0.2);
+}
+
 /* Editor Container */
 .editor-container {
+  position: relative;
   display: flex;
   flex: 1;
   overflow: hidden;
+  border: none;
+  box-shadow: none;
 }
 
 .editor-textarea {
   flex: 1;
   padding: var(--space-6);
-  border: none;
+  border: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  box-shadow: none !important;
   resize: none;
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.8;
-  outline: none;
+  outline: none !important;
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
   caret-color: var(--color-primary);
-  transition: background 0.2s ease;
 }
 
 .editor-textarea:focus {
-  background: linear-gradient(180deg, var(--color-bg-elevated) 0%, rgba(99, 102, 241, 0.02) 100%);
+  background: var(--color-bg-elevated);
 }
 
 .editor-textarea::placeholder {
@@ -388,18 +543,20 @@ watch(() => props.modelValue, (newValue) => {
 
 /* View Mode Styles */
 .view-write .editor-textarea {
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   border: none;
+  padding: var(--space-4) var(--space-6);
 }
 
 .view-preview .editor-preview {
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
 }
 
 .view-split .editor-textarea {
-  border-right: 1px solid var(--color-border-light);
+  border-right: none;
   max-width: none;
   margin: 0;
 }

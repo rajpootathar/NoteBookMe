@@ -1,8 +1,12 @@
-const API_BASE = 'https://api.z.ai/api/coding/paas/v4';
-const API_KEY = 'be60ee7203564af28fa6a19ac4def293.MT5fQJMGSyzrOplD';
+const API_BASE = import.meta.env.VITE_AI_API_URL || 'https://api.z.ai/api/coding/paas/v4';
+const API_KEY = import.meta.env.VITE_AI_API_KEY;
 
 export const aiService = {
   async chat(messages, options = {}) {
+    if (!API_KEY) {
+      throw new Error('AI API Key is missing. Please check your .env file.');
+    }
+
     try {
       const response = await fetch(`${API_BASE}/chat/completions`, {
         method: 'POST',
@@ -11,7 +15,7 @@ export const aiService = {
           'Authorization': `Bearer ${API_KEY}`
         },
         body: JSON.stringify({
-          model: options.model || 'GLM-4.7',
+          model: options.model || import.meta.env.VITE_AI_MODEL_NAME || 'GLM-4.7',
           messages: messages,
           temperature: options.temperature ?? 0.7,
           max_tokens: options.maxTokens ?? 2000,

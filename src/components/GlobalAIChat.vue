@@ -2,46 +2,132 @@
   <div class="global-ai-chat">
     <div class="chat-header">
       <div>
-        <h3>🤖 AI Assistant</h3>
-        <p class="chat-subtitle">I can see all your notes! Ask me anything.</p>
+        <h3>AI Assistant</h3>
+        <p class="chat-subtitle">Search your notes with AI-powered RAG</p>
       </div>
-      <button @click="emit('close')" class="close-btn">×</button>
+      <button @click="emit('close')" class="close-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
     </div>
 
     <div class="quick-actions">
-      <button @click="summarizeAll" class="action-btn">
-        📝 Summarize All Notes
+      <button @click="summarizeAll" class="action-btn" :disabled="isLoading">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 2v6h6M16 13H8M16 17H8"/>
+        </svg>
+        Summarize
       </button>
-      <button @click="askQuestion" class="action-btn">
-        ❓ Ask a Question
+      <button @click="askQuestion" class="action-btn" :disabled="isLoading">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        Ask
       </button>
-      <button @click="generateIdeas" class="action-btn">
-        💡 Generate Ideas
+      <button @click="generateIdeas" class="action-btn" :disabled="isLoading">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+        Ideas
       </button>
-      <button @click="findConnections" class="action-btn">
-        🔗 Find Connections
+      <button @click="findConnections" class="action-btn" :disabled="isLoading">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="5" cy="6" r="3"/>
+          <circle cx="19" cy="6" r="3"/>
+          <circle cx="12" cy="18" r="3"/>
+          <line x1="5" y1="9" x2="12" y2="15"/>
+          <line x1="19" y1="9" x2="12" y2="15"/>
+        </svg>
+        Connect
       </button>
     </div>
 
     <div class="chat-messages" ref="messagesContainer">
-      <div
-        v-for="(message, index) in messages"
-        :key="index"
-        :class="['message', message.role]"
-      >
-        <div class="message-content">{{ message.content }}</div>
+      <!-- Welcome state -->
+      <div v-if="messages.length === 0 && !isLoading" class="welcome-state">
+        <div class="welcome-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <h3>Semantic Search Ready</h3>
+        <p>Ask questions about your notes using natural language. AI will find relevant content and provide answers with citations.</p>
       </div>
-      <div v-if="isLoading" class="message assistant">
-        <div class="message-content typing">Thinking...</div>
+
+      <!-- Messages -->
+      <template v-else>
+        <div
+          v-for="(message, index) in messages"
+          :key="index"
+          :class="['message', message.role]"
+        >
+          <div v-if="message.role === 'assistant'" class="message-avatar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div class="message-bubble">
+            <div class="message-content">{{ message.content }}</div>
+            <!-- Sources -->
+            <div v-if="message.sources && message.sources.length > 0" class="message-sources">
+              <div class="sources-header">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <path d="M14 2v6h6"/>
+                </svg>
+                <span>Sources</span>
+              </div>
+              <div class="sources-list">
+                <button
+                  v-for="source in message.sources"
+                  :key="source.noteId"
+                  @click="openNote(source.noteId)"
+                  class="source-chip"
+                  :title="`Relevance: ${source.relevance || Math.round((source.score || 0) * 100)}%`"
+                >
+                  <span class="source-index">[{{ source.index }}]</span>
+                  <span class="source-title">{{ source.noteTitle || source.title }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Loading indicator -->
+      <div v-if="isLoading" class="thinking-indicator">
+        <div class="thinking-avatar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="thinking-content">
+          <div class="thinking-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <span class="thinking-text">Searching your notes...</span>
+        </div>
       </div>
     </div>
 
     <div class="chat-prompt-container">
       <div class="prompt-suggestions" v-if="messages.length === 0">
         <span>Try:</span>
-        <button @click="setPrompt('What are my main themes?')">What are my main themes?</button>
-        <button @click="setPrompt('Summarize everything')">Summarize everything</button>
-        <button @click="setPrompt('What should I work on?')">What should I work on?</button>
+        <button @click="setPrompt('What are the main themes in my notes?')">Main themes</button>
+        <button @click="setPrompt('Summarize my recent learnings')">Recent learnings</button>
+        <button @click="setPrompt('What should I focus on next?')">Next focus</button>
       </div>
       <form @submit.prevent="sendMessage" class="chat-input">
         <input
@@ -49,9 +135,13 @@
           type="text"
           placeholder="Ask about your notes..."
           :disabled="isLoading"
+          ref="inputRef"
         >
-        <button type="submit" :disabled="isLoading || !userInput.trim()">
-          Send
+        <button type="submit" :disabled="isLoading || !userInput.trim()" class="send-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
         </button>
       </form>
     </div>
@@ -59,34 +149,31 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue';
-import { aiService } from '../services/ai.js';
+import { ref, nextTick, onMounted } from 'vue';
+import { ragService } from '../services/ragService.js';
 
 const props = defineProps({
   notes: {
     type: Array,
     default: () => []
+  },
+  currentNotebookId: {
+    type: String,
+    default: null
   }
 });
 
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'openNote']);
 
 const messages = ref([]);
 const userInput = ref('');
 const isLoading = ref(false);
 const messagesContainer = ref(null);
+const inputRef = ref(null);
 
-const notesContext = ref('');
-
-// Update notes context when notes change
-async function updateNotesContext() {
-  if (props.notes.length === 0) {
-    notesContext.value = 'No notes yet.';
-    return;
-  }
-
-  notesContext.value = props.notes.map(n => `# ${n.title}\n${n.content}`).join('\n\n---\n\n');
-}
+onMounted(() => {
+  inputRef.value?.focus();
+});
 
 async function sendMessage() {
   const message = userInput.value.trim();
@@ -99,35 +186,26 @@ async function sendMessage() {
   await scrollToBottom();
 
   try {
-    await updateNotesContext();
+    const result = await ragService.askQuestion(message, {
+      topK: 5,
+      notebookId: props.currentNotebookId
+    });
 
-    const systemPrompt = `You are a helpful assistant for note-taking and research.
-The user has shared ALL their notes with you. Help them by:
-- Answering questions about ANY of their notes
-- Finding connections between notes
-- Summarizing themes and patterns
-- Providing insights based on their complete knowledge base
-- Suggesting improvements and new ideas
-
-Keep responses concise but thorough. If referencing specific notes, mention the note titles.
-
-Here are ALL the user's notes:
-${notesContext.value}`;
-
-    const response = await aiService.chat([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: message }
-    ]);
-
-    messages.value.push({ role: 'assistant', content: response });
-  } catch (error) {
     messages.value.push({
       role: 'assistant',
-      content: 'Sorry, I encountered an error. Please try again.'
+      content: result.content,
+      sources: result.sources
+    });
+  } catch (error) {
+    console.error('RAG chat error:', error);
+    messages.value.push({
+      role: 'assistant',
+      content: 'Sorry, I encountered an error while searching your notes. Please try again.'
     });
   } finally {
     isLoading.value = false;
     await scrollToBottom();
+    inputRef.value?.focus();
   }
 }
 
@@ -140,14 +218,17 @@ async function summarizeAll() {
     return;
   }
 
-  messages.value.push({ role: 'user', content: 'Please summarize all my notes and highlight the main themes.' });
+  messages.value.push({ role: 'user', content: 'Summarize my notes and highlight the main themes.' });
   isLoading.value = true;
   await scrollToBottom();
 
   try {
-    await updateNotesContext();
-    const summary = await aiService.summarizeNotes(props.notes);
-    messages.value.push({ role: 'assistant', content: summary });
+    const result = await ragService.summarizeNotes(null, props.currentNotebookId);
+    messages.value.push({
+      role: 'assistant',
+      content: result.content,
+      sources: result.sources
+    });
   } catch (error) {
     messages.value.push({
       role: 'assistant',
@@ -168,14 +249,17 @@ async function askQuestion() {
 }
 
 async function generateIdeas() {
-  messages.value.push({ role: 'user', content: 'Based on all my notes, what ideas or improvements can you suggest?' });
+  messages.value.push({ role: 'user', content: 'Based on my notes, suggest creative ideas and next steps.' });
   isLoading.value = true;
   await scrollToBottom();
 
   try {
-    await updateNotesContext();
-    const ideas = await aiService.generateIdeas(notesContext.value);
-    messages.value.push({ role: 'assistant', content: ideas });
+    const result = await ragService.generateIdeas(null, props.currentNotebookId);
+    messages.value.push({
+      role: 'assistant',
+      content: result.content,
+      sources: result.sources
+    });
   } catch (error) {
     messages.value.push({
       role: 'assistant',
@@ -201,18 +285,12 @@ async function findConnections() {
   await scrollToBottom();
 
   try {
-    await updateNotesContext();
-    const response = await aiService.chat([
-      {
-        role: 'system',
-        content: 'You are an analytical assistant. Find connections, patterns, and themes across multiple notes. Be specific about which notes relate to each other.'
-      },
-      {
-        role: 'user',
-        content: `What connections and themes can you find between these notes?\n\n${notesContext.value}`
-      }
-    ]);
-    messages.value.push({ role: 'assistant', content: response });
+    const result = await ragService.findConnections(props.currentNotebookId);
+    messages.value.push({
+      role: 'assistant',
+      content: result.content,
+      sources: result.sources
+    });
   } catch (error) {
     messages.value.push({
       role: 'assistant',
@@ -226,6 +304,11 @@ async function findConnections() {
 
 function setPrompt(prompt) {
   userInput.value = prompt;
+  inputRef.value?.focus();
+}
+
+function openNote(noteId) {
+  emit('openNote', noteId);
 }
 
 async function scrollToBottom() {
@@ -267,17 +350,6 @@ async function scrollToBottom() {
   border-radius: 50%;
 }
 
-.chat-header::after {
-  content: '';
-  position: absolute;
-  bottom: -30%;
-  left: -10%;
-  width: 150px;
-  height: 150px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-  border-radius: 50%;
-}
-
 .chat-header h3 {
   margin: 0 0 6px 0;
   font-size: 20px;
@@ -299,7 +371,6 @@ async function scrollToBottom() {
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
-  font-size: 22px;
   cursor: pointer;
   padding: 0;
   width: 36px;
@@ -320,63 +391,39 @@ async function scrollToBottom() {
 
 .quick-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-  padding: var(--space-4);
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-3);
   border-bottom: 1px solid var(--color-border-light);
   background: var(--color-bg-secondary);
 }
 
 .action-btn {
-  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3);
   border: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
 }
 
-.action-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.action-btn:hover {
+.action-btn:hover:not(:disabled) {
   border-color: var(--color-primary);
+  color: var(--color-primary);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
 }
 
-.action-btn:hover::before {
-  opacity: 1;
-}
-
-.action-btn:nth-child(1):hover {
-  border-color: #6366f1;
-}
-
-.action-btn:nth-child(2):hover {
-  border-color: #f59e0b;
-}
-
-.action-btn:nth-child(3):hover {
-  border-color: #10b981;
-}
-
-.action-btn:nth-child(4):hover {
-  border-color: #06b6d4;
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .chat-messages {
@@ -385,44 +432,104 @@ async function scrollToBottom() {
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   background:
     radial-gradient(ellipse at top right, rgba(99, 102, 241, 0.03) 0%, transparent 50%),
     radial-gradient(ellipse at bottom left, rgba(139, 92, 246, 0.03) 0%, transparent 50%),
     var(--color-bg-primary);
 }
 
-.message {
-  max-width: 85%;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  line-height: 1.6;
+.welcome-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: var(--space-8);
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.welcome-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border-radius: var(--radius-xl);
+  color: var(--color-primary);
+  margin-bottom: var(--space-4);
+}
+
+.welcome-state h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.welcome-state p {
+  margin: var(--space-2) 0 0;
   font-size: 14px;
-  animation: messageSlide 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: var(--color-text-tertiary);
+  max-width: 280px;
+}
+
+.message {
+  display: flex;
+  gap: var(--space-3);
+  max-width: 90%;
+  animation: messageSlide 0.3s ease;
 }
 
 @keyframes messageSlide {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .message.user {
   align-self: flex-end;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  flex-direction: row-reverse;
+}
+
+.message.assistant {
+  align-self: flex-start;
+}
+
+.message-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+  border-radius: var(--radius-full);
+  color: white;
+  flex-shrink: 0;
+}
+
+.message-bubble {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.message.user .message-bubble {
+  background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
   color: white;
   border-bottom-right-radius: var(--radius-sm);
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
 }
 
-.message.assistant {
-  align-self: flex-start;
-  background: var(--color-bg-secondary);
+.message.assistant .message-bubble {
+  background: var(--color-bg-elevated);
   color: var(--color-text-primary);
   border-bottom-left-radius: var(--radius-sm);
   border: 1px solid var(--color-border-light);
@@ -433,15 +540,124 @@ async function scrollToBottom() {
   word-wrap: break-word;
 }
 
-.message-content.typing {
-  color: var(--color-primary);
-  font-style: italic;
-  animation: typingPulse 1.5s infinite;
+.message-sources {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
 }
 
-@keyframes typingPulse {
+.sources-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.sources-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.source-chip:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.source-index {
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.source-title {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thinking-indicator {
+  display: flex;
+  gap: var(--space-3);
+  align-self: flex-start;
+  animation: fadeIn 0.3s ease;
+}
+
+.thinking-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+  border-radius: var(--radius-full);
+  color: white;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0.7; }
+}
+
+.thinking-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.thinking-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: -0.32s; }
+.thinking-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.thinking-text {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  font-style: italic;
 }
 
 .chat-prompt-container {
@@ -493,7 +709,7 @@ async function scrollToBottom() {
 .chat-input input {
   flex: 1;
   padding: 12px 18px;
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-full);
   outline: none;
   font-size: 14px;
@@ -513,31 +729,35 @@ async function scrollToBottom() {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
-.chat-input button {
-  padding: 12px 24px;
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: white;
   border: none;
   border-radius: var(--radius-full);
   cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
-.chat-input button:hover:not(:disabled) {
+.send-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
-.chat-input button:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.chat-input button:disabled {
+.send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .quick-actions {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>
