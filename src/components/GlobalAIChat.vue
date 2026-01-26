@@ -76,6 +76,15 @@
           </div>
           <div class="message-bubble">
             <div class="message-content">{{ message.content }}</div>
+            <!-- Message Actions -->
+            <div v-if="message.role === 'assistant'" class="message-actions">
+              <button @click="saveAsNote(message, index)" class="save-note-btn" title="Save as new note">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Save as Note
+              </button>
+            </div>
             <!-- Sources -->
             <div v-if="message.sources && message.sources.length > 0" class="message-sources">
               <div class="sources-header">
@@ -163,7 +172,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close', 'openNote']);
+const emit = defineEmits(['close', 'openNote', 'createNote']);
 
 const messages = ref([]);
 const userInput = ref('');
@@ -309,6 +318,18 @@ function setPrompt(prompt) {
 
 function openNote(noteId) {
   emit('openNote', noteId);
+}
+
+function saveAsNote(message, index) {
+  // Find the user question that preceded this response
+  const userMessage = messages.value[index - 1];
+  const title = userMessage ? `AI: ${userMessage.content.slice(0, 50)}${userMessage.content.length > 50 ? '...' : ''}` : 'AI Generated Note';
+
+  emit('createNote', {
+    title,
+    content: message.content,
+    sources: message.sources || []
+  });
 }
 
 async function scrollToBottom() {
@@ -538,6 +559,40 @@ async function scrollToBottom() {
 .message-content {
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+.message-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.save-note-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  color: #16a34a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.save-note-btn:hover {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.2) 100%);
+  border-color: #22c55e;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2);
+}
+
+.save-note-btn svg {
+  flex-shrink: 0;
 }
 
 .message-sources {

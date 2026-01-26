@@ -1,5 +1,27 @@
-import { storage } from './storage.js';
 import { aiService } from './ai.js';
+
+const getAuthHeader = () => {
+  const token = localStorage.getItem('auth_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+async function apiRequest(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeader(),
+      ...options.headers
+    }
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Request failed' }));
+    throw new Error(error.error || `Request failed: ${response.status}`);
+  }
+
+  return response.json();
+}
 
 /**
  * Frontend RAG Service
@@ -14,7 +36,7 @@ export const ragService = {
    * @returns {Promise<Array>} - Search results with scores
    */
   async semanticSearch(query, topK = 5, notebookId = null) {
-    return storage.request('/api/search/semantic', {
+    return apiRequest('/api/search/semantic', {
       method: 'POST',
       body: JSON.stringify({ query, topK, notebookId })
     });
@@ -28,7 +50,7 @@ export const ragService = {
    * @returns {Promise<object>} - RAG context with sources
    */
   async getRAGContext(question, topK = 5, notebookId = null) {
-    return storage.request('/api/ai/rag', {
+    return apiRequest('/api/ai/rag', {
       method: 'POST',
       body: JSON.stringify({ question, topK, notebookId })
     });

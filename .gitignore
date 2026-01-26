@@ -26,8 +26,11 @@ dist-ssr
 # Environment Variables
 .env
 
-# Data
+# Data (PROTECTED - DO NOT DELETE)
 data/
 *.db
 *.db-shm
 *.db-wal
+
+# Local Claude instructions
+CLAUDE.md

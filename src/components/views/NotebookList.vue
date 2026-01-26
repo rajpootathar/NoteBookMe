@@ -19,6 +19,8 @@
       <GlobalAIChat
         :notes="allNotes"
         @close="showGlobalAI = false"
+        @openNote="openNote"
+        @createNote="createNoteFromAI"
       />
     </div>
 
@@ -226,6 +228,35 @@ async function createNote() {
     emit('openNote', note.id);
   } catch (error) {
     console.error('Failed to create note:', error);
+  }
+}
+
+async function createNoteFromAI({ title, content, sources }) {
+  try {
+    const notebookId = currentNotebook.value?.id || (store.state.notebooks[0]?.id);
+    if (!notebookId) {
+      alert('Please create a notebook first!');
+      return;
+    }
+
+    // Add sources as references at the end if available
+    let noteContent = content;
+    if (sources && sources.length > 0) {
+      noteContent += '\n\n---\n\n**Sources:**\n';
+      sources.forEach(source => {
+        noteContent += `- [${source.index}] ${source.noteTitle || source.title}\n`;
+      });
+    }
+
+    const note = await store.createNote({
+      notebookId,
+      title,
+      content: noteContent
+    });
+    showGlobalAI.value = false;
+    emit('openNote', note.id);
+  } catch (error) {
+    console.error('Failed to create note from AI:', error);
   }
 }
 
