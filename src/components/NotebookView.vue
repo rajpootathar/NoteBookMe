@@ -355,6 +355,12 @@
                       📝 Outline
                     </button>
                   </div>
+                  <!-- Generation Loading Indicator -->
+                  <div v-if="isGenerating" class="generating-indicator">
+                    <div class="generating-spinner"></div>
+                    <span>Generating {{ generatingType }}...</span>
+                    <p class="generating-hint">This may take a moment</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -363,7 +369,7 @@
             <div
               v-for="(msg, idx) in messages"
               :key="idx"
-              :class="['message', msg.role]"
+              :class="['message', msg.role, { 'generated-content': msg.isGenerated }]"
             >
               <div v-if="msg.role === 'assistant'" class="message-avatar">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -371,7 +377,11 @@
                 </svg>
               </div>
               <div class="message-content">
-                <div class="message-text">{{ msg.content }}</div>
+                <!-- Generated content header -->
+                <div v-if="msg.isGenerated" class="generated-header">
+                  <span class="generated-badge">{{ msg.generatedType }}</span>
+                </div>
+                <div class="message-text" :class="{ 'generated-text': msg.isGenerated }">{{ msg.content }}</div>
                 <div v-if="msg.sources && msg.sources.length" class="message-sources">
                   <button
                     v-for="src in msg.sources"
@@ -381,6 +391,30 @@
                   >
                     [{{ src.index || sources.indexOf(src) + 1 }}] {{ src.noteTitle || src }}
                   </button>
+                </div>
+                <!-- Save as Note button for generated content -->
+                <div v-if="msg.isGenerated && !msg.saved" class="generated-actions">
+                  <button class="save-note-btn" @click="saveGeneratedAsNote(msg, idx)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                      <polyline points="17 21 17 13 7 13 7 21"/>
+                      <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    Save as Note
+                  </button>
+                  <button class="copy-btn" @click="copyGeneratedContent(msg.content)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                    Copy
+                  </button>
+                </div>
+                <div v-if="msg.saved" class="saved-badge">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  Saved as note
                 </div>
               </div>
             </div>
@@ -465,6 +499,7 @@ const chatInput = ref(null);
 
 // Studio
 const isGenerating = ref(false);
+const generatingType = ref('');
 const generatedOutput = ref(null);
 const generatedTitle = ref('');
 
@@ -921,10 +956,13 @@ const outputTemplates = {
 };
 
 async function generate(type) {
+  // Prevent duplicate calls
+  if (isGenerating.value) return;
   if (selectedSources.value.size === 0) return;
 
   const template = outputTemplates[type];
   isGenerating.value = true;
+  generatingType.value = template.title;
 
   try {
     const selectedNotes = notes.value.filter(n => selectedSources.value.has(n.id));
@@ -937,26 +975,16 @@ async function generate(type) {
       { role: 'user', content: `${template.prompt}\n\nSources:\n${sourceContent}` }
     ], { maxTokens: 3000 });
 
-    // Create a new note with the generated content
-    const noteData = {
-      title: template.title,
-      content: response,
-      tags: ['generated', type]
-    };
-
-    // Add to current notebook if we're in one
-    if (props.notebookId) {
-      noteData.notebookId = props.notebookId;
-    }
-
-    await store.createNote(noteData);
-    await store.loadNotes();
-
-    // Add a chat message to confirm
+    // Show generated content in chat with option to save
     messages.value.push({
       role: 'assistant',
-      content: `Created "${template.title}" as a new source in your notebook.`
+      content: response,
+      isGenerated: true,
+      generatedType: template.title,
+      saved: false
     });
+
+    await scrollToBottom();
 
   } catch (error) {
     console.error('Generation error:', error);
@@ -966,7 +994,34 @@ async function generate(type) {
     });
   } finally {
     isGenerating.value = false;
+    generatingType.value = '';
   }
+}
+
+async function saveGeneratedAsNote(msg, idx) {
+  try {
+    const noteData = {
+      title: msg.generatedType || 'Generated Content',
+      content: msg.content,
+      tags: ['generated', msg.generatedType?.toLowerCase().replace(/\s+/g, '-') || 'content']
+    };
+
+    if (props.notebookId) {
+      noteData.notebookId = props.notebookId;
+    }
+
+    await store.createNote(noteData);
+    await store.loadNotes();
+
+    // Mark message as saved
+    messages.value[idx].saved = true;
+  } catch (error) {
+    console.error('Failed to save as note:', error);
+  }
+}
+
+function copyGeneratedContent(content) {
+  navigator.clipboard.writeText(content);
 }
 
 function copyOutput() {
@@ -2248,6 +2303,94 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
+/* Generated content styles */
+.message.generated-content .message-content {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.generated-header {
+  margin-bottom: var(--space-3);
+}
+
+.generated-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.generated-text {
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.generated-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.save-note-btn, .copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.save-note-btn {
+  background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+}
+
+.save-note-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.copy-btn {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.copy-btn:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-text-tertiary);
+}
+
+.saved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+}
+
 /* Typing indicator */
 .typing-dots {
   display: flex;
@@ -2742,6 +2885,50 @@ onUnmounted(() => {
 .gen-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Generation Loading Indicator */
+.generating-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  margin-top: var(--space-3);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-lg);
+  animation: fadeIn 0.3s ease;
+}
+
+.generating-indicator span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.generating-indicator .generating-hint {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+.generating-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Responsive */

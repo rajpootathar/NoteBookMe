@@ -1,17 +1,47 @@
-import { pipeline } from '@xenova/transformers';
 import { EMBEDDING_DIM } from './db.js';
 
 let embedder = null;
 let isLoading = false;
 let loadPromise = null;
+let unloadTimer = null;
 
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
+const UNLOAD_AFTER_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Initialize the embedding model
+ * Unload the embedding model to free RAM
+ */
+function unloadModel() {
+  if (embedder) {
+    console.log('Unloading embedding model (idle for 5 minutes)');
+    embedder = null;
+    loadPromise = null;
+    // Force garbage collection hint (only works if --expose-gc flag is set)
+    if (global.gc) {
+      global.gc();
+    }
+  }
+}
+
+/**
+ * Reset the unload timer (called on each embedding request)
+ */
+function resetUnloadTimer() {
+  if (unloadTimer) {
+    clearTimeout(unloadTimer);
+  }
+  unloadTimer = setTimeout(unloadModel, UNLOAD_AFTER_MS);
+}
+
+/**
+ * Initialize the embedding model (lazy load)
  * Uses singleton pattern to ensure only one model is loaded
+ * Model will auto-unload after 5 minutes of inactivity
  */
 export async function initEmbeddings() {
+  // Reset unload timer on each access
+  resetUnloadTimer();
+
   if (embedder) return embedder;
 
   if (isLoading) {
@@ -23,6 +53,8 @@ export async function initEmbeddings() {
 
   loadPromise = (async () => {
     try {
+      // Dynamic import for lazy loading
+      const { pipeline } = await import('@xenova/transformers');
       embedder = await pipeline('feature-extraction', MODEL_NAME, {
         quantized: true // Use quantized model for faster loading
       });

@@ -92,22 +92,16 @@ export async function authenticateUser(username, password) {
 }
 
 /**
- * Express middleware for JWT authentication
+ * Create a token verifier function (framework-agnostic)
+ * Returns a function that validates a token and returns { valid: boolean, user: object }
  */
 export function createAuthMiddleware(jwtSecret) {
-  return (req, res, next) => {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-
+  return (token) => {
     try {
-      const token = authHeader.slice(7);
-      req.user = verifyToken(token, jwtSecret);
-      next();
+      const user = verifyToken(token, jwtSecret);
+      return { valid: true, user };
     } catch (error) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return { valid: false, user: null };
     }
   };
 }
