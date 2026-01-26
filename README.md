@@ -3,7 +3,7 @@
 **Your Self-Hosted AI Second Brain.**
 A private, powerful, and intelligent note-taking application designed to be a simpler, faster alternative to NotebookLM and Obsidian.
 
-![UI Screenshot](ui-screenshot.png)
+![UI Screenshot](screenshots/ui-screenshot.png)
 
 ## ✨ Features
 
@@ -21,14 +21,14 @@ Your personal AI assistant is woven into every note:
     -   **📍 Insert**: Seamlessly expand on points right where your cursor is.
     -   **🔄 Replace**: Rewrite sections or entire notes to improve clarity/tone.
 
-![Note Editor](note-editor-screenshot.png)
+![Note Editor](screenshots/note-editor-screenshot.png)
 
 ### 🕐 Version History
 -   **Google Docs-style Auto-save**: Automatic versioning based on time and idle detection.
 -   **Preview & Restore**: View any previous version and restore with one click.
 -   **AI Edit Checkpoints**: Every AI modification creates a secure checkpoint.
 
-![Version History](history-screenshot.png)
+![Version History](screenshots/history-screenshot.png)
 
 ### 🛡️ Privacy & Safety
 -   **100% Self-Hosted**: Your data lives on **your** device/server. No vendor lock-in.
@@ -77,13 +77,13 @@ Your personal AI assistant is woven into every note:
 ## 📸 Screenshots
 
 ### AI Chat Interface
-![AI Chat](quick-capture-screenshot.png)
+![AI Chat](screenshots/quick-capture-screenshot.png)
 
 ### AI Assistant Panel
-![AI Assistant](ai-chat-screenshot.png)
+![AI Assistant](screenshots/ai-chat-screenshot.png)
 
 ### Context Menu
-![Context Menu](context-menu-screenshot.png)
+![Context Menu](screenshots/context-menu-screenshot.png)
 
 ## 📄 License
 
