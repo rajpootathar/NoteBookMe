@@ -213,7 +213,7 @@ export async function deleteNotebook(id) {
   // Also delete related notes
   const notesTable = tables['notes'];
   if (notesTable) {
-    await notesTable.delete(`"notebookId" = '${id}'`);
+    await notesTable.delete(`\`notebookId\` = '${id}'`);
   }
 
   return true;
@@ -226,7 +226,7 @@ export async function getAllNotes(notebookId = null) {
 
   let query = table.query();
   if (notebookId) {
-    query = query.where(`"notebookId" = '${notebookId}'`);
+    query = query.where(`\`notebookId\` = '${notebookId}'`);
   }
 
   const results = await query.toArray();

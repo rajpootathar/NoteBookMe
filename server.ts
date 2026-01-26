@@ -1,7 +1,12 @@
-import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import { dirname, join, extname } from 'path';
 import { readFile, stat } from 'fs/promises';
+import { config } from 'dotenv';
+
+// Get absolute path for dotenv to work regardless of CWD
+const __filename = fileURLToPath(import.meta.url);
+const __dirname_early = dirname(__filename);
+config({ path: join(__dirname_early, '.env') });
 
 // Database & Services
 import {
@@ -16,8 +21,7 @@ import { initEmbeddings, generateNoteEmbedding } from './services/embeddingServi
 import { authenticateUser, generateToken, createAuthMiddleware, initDefaultUser } from './services/authService.js';
 import { semanticSearch, buildRAGContext, formatRAGSystemPrompt, formatCitations } from './services/ragService.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = __dirname_early;
 
 // ============ Configuration ============
 const dbPath = process.env.DB_PATH || './data/notebookme.lance';
