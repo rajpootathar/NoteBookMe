@@ -186,6 +186,42 @@
             </div>
           </Teleport>
 
+          <!-- Notebook Picker Modal -->
+          <Teleport to="body">
+            <div
+              v-if="showNotebookPicker"
+              class="notebook-picker-overlay"
+              @click="cancelNotebookPicker"
+            >
+              <div class="notebook-picker-modal" @click.stop>
+                <div class="picker-header">
+                  <h3>Save to Notebook</h3>
+                  <button class="close-btn" @click="cancelNotebookPicker">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="picker-body">
+                  <p class="picker-hint">Select a notebook to save the generated content:</p>
+                  <div class="notebook-list">
+                    <button
+                      v-for="notebook in store.state.notebooks"
+                      :key="notebook.id"
+                      class="notebook-option"
+                      @click="selectNotebookForSave(notebook.id)"
+                    >
+                      <span class="notebook-emoji">{{ notebook.emoji || '📓' }}</span>
+                      <span class="notebook-name">{{ notebook.name }}</span>
+                      <span class="notebook-count">{{ store.state.notes.filter(n => n.notebookId === notebook.id).length }} notes</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Teleport>
+
           <div v-if="notes.length === 0" class="empty-sources">
             <div class="empty-icon">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -525,6 +561,10 @@ const hoveredNoteId = ref(null);
 // Context menu
 const contextMenuNote = ref(null);
 const contextMenuPosition = ref({ x: 0, y: 0 });
+
+// Notebook picker for saving generated content
+const showNotebookPicker = ref(false);
+const pendingSaveData = ref(null); // { type: 'generated' | 'output', data: any, messageIndex?: number }
 
 // Auto-select sources when notes load
 watch(notes, (newNotes) => {
@@ -1003,27 +1043,36 @@ async function generate(type) {
 }
 
 async function saveGeneratedAsNote(msg, idx) {
+  // If no specific notebook selected (All Notes view), ask user to pick one
+  if (!props.notebookId) {
+    pendingSaveData.value = {
+      type: 'generated',
+      data: msg,
+      messageIndex: idx
+    };
+    showNotebookPicker.value = true;
+    return;
+  }
+
+  await doSaveGeneratedAsNote(msg, idx, props.notebookId);
+}
+
+async function doSaveGeneratedAsNote(msg, idx, notebookId) {
   try {
-    // Always assign to a notebook - use current or first available
-    const targetNotebookId = props.notebookId || store.state.notebooks[0]?.id;
-
-    if (!targetNotebookId) {
-      console.error('No notebook available to save note');
-      return;
-    }
-
     const noteData = {
       title: msg.generatedType || 'Generated Content',
       content: msg.content,
       tags: ['generated', msg.generatedType?.toLowerCase().replace(/\s+/g, '-') || 'content'],
-      notebookId: targetNotebookId
+      notebookId: notebookId
     };
 
     await store.createNote(noteData);
     await store.loadNotes();
 
     // Mark message as saved
-    messages.value[idx].saved = true;
+    if (idx !== undefined && messages.value[idx]) {
+      messages.value[idx].saved = true;
+    }
   } catch (error) {
     console.error('Failed to save as note:', error);
   }
@@ -1040,17 +1089,65 @@ function copyOutput() {
 }
 
 async function saveAsNote() {
-  if (generatedOutput.value) {
-    const targetNotebookId = props.notebookId || store.state.notebooks[0]?.id;
-    await store.createNote({
-      title: generatedTitle.value,
-      content: generatedOutput.value,
-      tags: ['generated'],
-      notebookId: targetNotebookId
-    });
-    generatedOutput.value = null;
-    await store.loadNotes();
+  if (!generatedOutput.value) return;
+
+  // If no specific notebook selected (All Notes view), ask user to pick one
+  if (!props.notebookId) {
+    pendingSaveData.value = {
+      type: 'output',
+      data: {
+        title: generatedTitle.value,
+        content: generatedOutput.value
+      }
+    };
+    showNotebookPicker.value = true;
+    return;
   }
+
+  await doSaveAsNote(props.notebookId);
+}
+
+async function doSaveAsNote(notebookId) {
+  if (!generatedOutput.value && !pendingSaveData.value) return;
+
+  const data = pendingSaveData.value?.data || {
+    title: generatedTitle.value,
+    content: generatedOutput.value
+  };
+
+  await store.createNote({
+    title: data.title || 'Generated Content',
+    content: data.content,
+    tags: ['generated'],
+    notebookId: notebookId
+  });
+
+  generatedOutput.value = null;
+  pendingSaveData.value = null;
+  await store.loadNotes();
+}
+
+// Handle notebook selection from picker
+async function selectNotebookForSave(notebookId) {
+  if (!pendingSaveData.value) return;
+
+  if (pendingSaveData.value.type === 'generated') {
+    await doSaveGeneratedAsNote(
+      pendingSaveData.value.data,
+      pendingSaveData.value.messageIndex,
+      notebookId
+    );
+  } else if (pendingSaveData.value.type === 'output') {
+    await doSaveAsNote(notebookId);
+  }
+
+  showNotebookPicker.value = false;
+  pendingSaveData.value = null;
+}
+
+function cancelNotebookPicker() {
+  showNotebookPicker.value = false;
+  pendingSaveData.value = null;
 }
 
 // Audio Overview functions
@@ -1678,6 +1775,131 @@ onUnmounted(() => {
   height: 1px;
   background: var(--color-border-light, #333);
   margin: 4px 0;
+}
+
+/* Notebook Picker Modal - use :global because it's teleported to body */
+:global(.notebook-picker-overlay) {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+:global(.notebook-picker-modal) {
+  background: var(--color-bg-elevated, #1a1a2e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: modalSlideIn 0.2s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+:global(.picker-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-light, #333);
+}
+
+:global(.picker-header h3) {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #e5e5e5);
+}
+
+:global(.picker-header .close-btn) {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  border-radius: 6px;
+  color: var(--color-text-tertiary, #888);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+:global(.picker-header .close-btn:hover) {
+  background: var(--color-bg-secondary, #252538);
+  color: var(--color-text-primary, #e5e5e5);
+}
+
+:global(.picker-body) {
+  padding: 16px 20px;
+}
+
+:global(.picker-hint) {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: var(--color-text-secondary, #aaa);
+}
+
+:global(.notebook-list) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+:global(.notebook-option) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--color-bg-secondary, #252538);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+:global(.notebook-option:hover) {
+  background: var(--color-bg-tertiary, #2a2a40);
+  border-color: var(--color-primary, #6366f1);
+}
+
+:global(.notebook-emoji) {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+:global(.notebook-name) {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary, #e5e5e5);
+}
+
+:global(.notebook-count) {
+  font-size: 12px;
+  color: var(--color-text-tertiary, #888);
+  flex-shrink: 0;
 }
 
 /* Position source-item relatively for hover preview */
