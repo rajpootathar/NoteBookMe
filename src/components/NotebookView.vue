@@ -786,11 +786,15 @@ function closeContextMenu() {
 async function duplicateNote(note) {
   closeContextMenu();
   try {
+    // Ensure valid notebookId - check for non-empty string
+    const validNoteNotebookId = note.notebookId && note.notebookId.length > 10 ? note.notebookId : null;
+    const targetNotebookId = validNoteNotebookId || props.notebookId || store.state.notebooks[0]?.id;
+
     const newNote = await store.createNote({
       title: `${note.title || 'Untitled'} (copy)`,
       content: note.content || '',
       tags: [...(note.tags || [])],
-      notebookId: note.notebookId || props.notebookId
+      notebookId: targetNotebookId
     });
 
     if (newNote && newNote.id) {
@@ -1000,15 +1004,20 @@ async function generate(type) {
 
 async function saveGeneratedAsNote(msg, idx) {
   try {
+    // Always assign to a notebook - use current or first available
+    const targetNotebookId = props.notebookId || store.state.notebooks[0]?.id;
+
+    if (!targetNotebookId) {
+      console.error('No notebook available to save note');
+      return;
+    }
+
     const noteData = {
       title: msg.generatedType || 'Generated Content',
       content: msg.content,
-      tags: ['generated', msg.generatedType?.toLowerCase().replace(/\s+/g, '-') || 'content']
+      tags: ['generated', msg.generatedType?.toLowerCase().replace(/\s+/g, '-') || 'content'],
+      notebookId: targetNotebookId
     };
-
-    if (props.notebookId) {
-      noteData.notebookId = props.notebookId;
-    }
 
     await store.createNote(noteData);
     await store.loadNotes();
@@ -1032,10 +1041,12 @@ function copyOutput() {
 
 async function saveAsNote() {
   if (generatedOutput.value) {
+    const targetNotebookId = props.notebookId || store.state.notebooks[0]?.id;
     await store.createNote({
       title: generatedTitle.value,
       content: generatedOutput.value,
-      tags: ['generated']
+      tags: ['generated'],
+      notebookId: targetNotebookId
     });
     generatedOutput.value = null;
     await store.loadNotes();
