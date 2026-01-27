@@ -1,5 +1,5 @@
 <template>
-  <div class="sidebar">
+  <div class="sidebar" :class="{ collapsed: isCollapsed }">
     <div class="sidebar-header">
       <div class="brand">
         <div class="brand-icon">
@@ -10,6 +10,11 @@
         </div>
         <span class="brand-name">NotebookME</span>
       </div>
+      <button class="collapse-toggle" @click="toggleCollapse" :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
     </div>
 
     <nav class="sidebar-nav">
@@ -29,8 +34,8 @@
 
       <div class="nav-section-header">
         <span class="nav-section-title">Notebooks</span>
-        <button class="add-notebook-btn" @click="$emit('addNotebook')" title="Add notebook">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <button class="add-notebook-btn" @click="$emit('addNotebook')" title="Create notebook">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M5 12h14"/>
           </svg>
         </button>
@@ -49,13 +54,13 @@
     </nav>
 
     <div class="sidebar-footer">
-      <button class="new-btn" @click="openQuickCapture">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
-        New note
-      </button>
       <div class="footer-actions">
+        <button class="footer-btn" @click="$emit('openSettings')" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
         <button class="footer-btn" @click="downloadExport" title="Export All Data">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -76,21 +81,21 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useStore } from '../stores/useStore.js';
 
-const emit = defineEmits(['selectNotebook', 'addNotebook', 'logout']);
+const emit = defineEmits(['selectNotebook', 'addNotebook', 'logout', 'openSettings']);
 
 const store = useStore();
+
+const isCollapsed = ref(false);
 
 const notebooks = computed(() => store.state.notebooks);
 const notes = computed(() => store.state.notes);
 const currentNotebook = computed(() => store.state.currentNotebook);
 
-function openQuickCapture() {
-  if (typeof window !== 'undefined' && window.openQuickCapture) {
-    window.openQuickCapture();
-  }
+function toggleCollapse() {
+  isCollapsed.value = !isCollapsed.value;
 }
 
 function getNotebookCount(notebookId) {
@@ -170,11 +175,89 @@ onMounted(async () => {
   background: #1e1e2e;
   height: 100%;
   flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+.sidebar.collapsed {
+  width: 56px;
 }
 
 .sidebar-header {
-  padding: var(--space-4) var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-3);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 52px;
+}
+
+.collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.collapse-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.collapse-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.sidebar.collapsed .collapse-toggle svg {
+  transform: rotate(180deg);
+}
+
+/* Collapsed state */
+.sidebar.collapsed .brand-name,
+.sidebar.collapsed .nav-item span:not(.emoji),
+.sidebar.collapsed .nav-section-title,
+.sidebar.collapsed .add-notebook-btn,
+.sidebar.collapsed .count,
+.sidebar.collapsed .notebook-count {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-header {
+  justify-content: center;
+  padding: var(--space-3) var(--space-2);
+  position: relative;
+}
+
+.sidebar.collapsed .brand {
+  justify-content: center;
+}
+
+.sidebar.collapsed .collapse-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebar.collapsed .nav-section-header {
+  justify-content: center;
+  padding: var(--space-2) 0;
+}
+
+.sidebar.collapsed .footer-actions {
+  flex-direction: column;
 }
 
 .brand {
@@ -236,19 +319,21 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 5px;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.5);
-  transition: all var(--transition-fast);
+  color: #a5b4fc;
+  transition: all 0.2s ease;
 }
 
 .add-notebook-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #c7d2fe;
+  transform: scale(1.05);
 }
 
 .notebook-name {
@@ -363,17 +448,13 @@ onMounted(async () => {
 
 .sidebar-footer {
   padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .footer-actions {
   display: flex;
   justify-content: center;
   gap: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .footer-btn {
@@ -402,60 +483,5 @@ onMounted(async () => {
   color: #fca5a5;
 }
 
-.new-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%);
-  color: #c7d2fe;
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.new-btn::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  transition: width 0.4s ease, height 0.4s ease;
-}
-
-.new-btn:hover::before {
-  width: 200%;
-  height: 200%;
-}
-
-.new-btn:hover {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.25) 100%);
-  border-color: rgba(99, 102, 241, 0.5);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-}
-
-.new-btn:active {
-  transform: translateY(0);
-}
-
-.new-btn svg {
-  transition: transform 0.3s ease;
-}
-
-.new-btn:hover svg {
-  transform: rotate(90deg);
-}
 
 </style>

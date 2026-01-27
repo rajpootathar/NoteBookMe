@@ -3,68 +3,51 @@
     <!-- Sources Panel (Left) -->
     <div class="sources-panel" :class="{ collapsed: sourcesCollapsed }">
       <div class="panel-header">
-        <h2>Sources</h2>
+        <button @click="sourcesCollapsed = !sourcesCollapsed" class="icon-btn collapse-btn" title="Toggle panel">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="panel-title">Sources</span>
+        <div class="header-spacer"></div>
         <div class="header-actions">
-          <button @click="createInlineNote" class="icon-btn" title="Add note">
+          <button @click="createInlineNote" class="icon-btn add-note-btn" title="New note">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 5v14M5 12h14"/>
             </svg>
           </button>
-          <button @click="sourcesCollapsed = !sourcesCollapsed" class="icon-btn collapse-btn">
+          <button @click="closeEditor" class="icon-btn chat-icon-btn" :class="{ active: !editingNoteId }" title="Chat">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M15 18l-6-6 6-6"/>
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </button>
+          <template v-if="notes.length > 0">
+            <span class="header-separator"></span>
+            <button @click="selectAllSources" class="text-btn-header">All</button>
+            <span class="header-divider">|</span>
+            <button @click="deselectAllSources" class="text-btn-header">Clear</button>
+          </template>
         </div>
       </div>
 
       <div class="sources-content" v-if="!sourcesCollapsed">
-        <!-- Chat Button - Chat with all notes -->
-        <button
-          class="chat-nav-btn"
-          :class="{ active: !editingNoteId }"
-          @click="closeEditor"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span>Chat</span>
-        </button>
-
-        <!-- Add Source Button with Drag & Drop -->
+        <!-- Source List with Drag & Drop -->
         <div
-          class="add-source-zone"
+          class="source-list"
           :class="{ 'drag-over': isDragging }"
-          @click="createInlineNote"
           @dragover.prevent="handleDragOver"
           @dragleave="handleDragLeave"
           @drop.prevent="handleDrop"
         >
-          <div class="drop-indicator" v-if="isDragging">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <!-- Drop indicator -->
+          <div class="drop-indicator-inline" v-if="isDragging">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
-            <span>Drop to create note</span>
-            <span class="drop-hint">txt, md, json, csv supported</span>
+            <span>Drop files here</span>
           </div>
-          <div class="add-source-content" v-else>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-            <span>Add source</span>
-          </div>
-        </div>
-
-        <!-- Source Actions -->
-        <div class="source-actions" v-if="notes.length > 0">
-          <button @click="selectAllSources" class="text-btn">Select all</button>
-          <button @click="deselectAllSources" class="text-btn">Clear</button>
-        </div>
-
-        <!-- Source List -->
-        <div class="source-list">
           <div
             v-for="note in notes"
             :key="note.id"
@@ -85,55 +68,12 @@
               >
               <span class="checkbox-custom"></span>
             </label>
-            <div class="source-content" @click.stop="openNoteEditor(note)">
-              <div class="source-icon" :class="getContentTypeClass(note)">
-                <!-- Code icon -->
-                <svg v-if="getContentType(note) === 'code'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="16 18 22 12 16 6"/>
-                  <polyline points="8 6 2 12 8 18"/>
-                </svg>
-                <!-- Checklist icon -->
-                <svg v-else-if="getContentType(note) === 'checklist'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 11l3 3L22 4"/>
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>
-                <!-- Link icon -->
-                <svg v-else-if="getContentType(note) === 'link'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-                </svg>
-                <!-- Meeting icon -->
-                <svg v-else-if="getContentType(note) === 'meeting'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-                <!-- Idea icon -->
-                <svg v-else-if="getContentType(note) === 'idea'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 18h6"/>
-                  <path d="M10 22h4"/>
-                  <path d="M12 2a7 7 0 0 0-4 12.9V17h8v-2.1A7 7 0 0 0 12 2z"/>
-                </svg>
-                <!-- Default document icon -->
-                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <path d="M14 2v6h6"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-              </div>
-              <div class="source-info">
-                <span class="source-title">{{ note.title || 'Untitled' }}</span>
-                <span class="source-preview">{{ getPreview(note.content) }}</span>
-                <div class="source-tags" v-if="note.tags && note.tags.length > 0">
-                  <span v-for="tag in note.tags.slice(0, 2)" :key="tag" class="source-tag">{{ tag }}</span>
-                  <span v-if="note.tags.length > 2" class="source-tag-more">+{{ note.tags.length - 2 }}</span>
-                </div>
-              </div>
+            <div class="source-content-compact" @click.stop="openNoteEditor(note)">
+              <span class="source-title">{{ note.title || 'Untitled' }}</span>
+              <span v-if="note.tags && note.tags.length > 0" class="source-tag-inline">{{ note.tags[0] }}</span>
             </div>
             <button class="source-menu" @click.stop="openSourceMenu(note, $event)" title="More options">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="1"/>
                 <circle cx="12" cy="5" r="1"/>
                 <circle cx="12" cy="19" r="1"/>
@@ -142,7 +82,11 @@
 
             <!-- Hover Preview -->
             <div v-if="hoveredNoteId === note.id && note.content && !contextMenuNote" class="source-hover-preview">
+              <div class="preview-title">{{ note.title || 'Untitled' }}</div>
               <div class="preview-content">{{ getFullPreview(note.content) }}</div>
+              <div class="preview-tags" v-if="note.tags && note.tags.length > 0">
+                <span v-for="tag in note.tags" :key="tag" class="preview-tag">{{ tag }}</span>
+              </div>
             </div>
           </div>
 
@@ -195,7 +139,7 @@
             >
               <div class="notebook-picker-modal" @click.stop>
                 <div class="picker-header">
-                  <h3>Save to Notebook</h3>
+                  <h3>{{ pendingSaveData?.type === 'newNote' ? 'Create Note In' : 'Save to Notebook' }}</h3>
                   <button class="close-btn" @click="cancelNotebookPicker">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="18" y1="6" x2="6" y2="18"/>
@@ -204,7 +148,7 @@
                   </button>
                 </div>
                 <div class="picker-body">
-                  <p class="picker-hint">Select a notebook to save the generated content:</p>
+                  <p class="picker-hint">{{ pendingSaveData?.type === 'newNote' ? 'Select a notebook for your new note:' : 'Select a notebook to save the generated content:' }}</p>
                   <div class="notebook-list">
                     <button
                       v-for="notebook in store.state.notebooks"
@@ -756,12 +700,26 @@ function setViewMode(mode) {
 
 // Create a new note inline (no modal)
 async function createInlineNote() {
+  // If no specific notebook selected (All Notes view), ask user to pick one
+  if (!props.notebookId) {
+    pendingSaveData.value = {
+      type: 'newNote',
+      data: null
+    };
+    showNotebookPicker.value = true;
+    return;
+  }
+
+  await doCreateInlineNote(props.notebookId);
+}
+
+async function doCreateInlineNote(notebookId) {
   try {
     const newNote = await store.createNote({
       title: '',
       content: '',
       tags: [],
-      notebookId: props.notebookId || store.state.notebooks[0]?.id
+      notebookId: notebookId
     });
 
     if (newNote && newNote.id) {
@@ -1139,6 +1097,11 @@ async function selectNotebookForSave(notebookId) {
     );
   } else if (pendingSaveData.value.type === 'output') {
     await doSaveAsNote(notebookId);
+  } else if (pendingSaveData.value.type === 'newNote') {
+    showNotebookPicker.value = false;
+    pendingSaveData.value = null;
+    await doCreateInlineNote(notebookId);
+    return;
   }
 
   showNotebookPicker.value = false;
@@ -1257,43 +1220,91 @@ onUnmounted(() => {
 }
 
 .sources-panel.collapsed {
-  width: 48px;
+  width: 40px;
 }
 
 .sources-panel.collapsed .panel-header {
   flex-direction: column;
   padding: var(--space-2);
+  gap: 0;
 }
 
-.sources-panel.collapsed .panel-header h2,
-.sources-panel.collapsed .header-actions button:not(.collapse-btn) {
-  display: none;
-}
-
+.sources-panel.collapsed .panel-title,
+.sources-panel.collapsed .header-spacer,
 .sources-panel.collapsed .header-actions {
-  width: 100%;
-  justify-content: center;
+  display: none;
 }
 
 .panel-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--space-4);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-border-light);
+  min-height: 40px;
 }
 
-.panel-header h2 {
-  font-size: 14px;
+.panel-title {
+  font-size: 13px;
   font-weight: 600;
-  margin: 0;
+  color: var(--color-text-primary);
   white-space: nowrap;
-  overflow: hidden;
+}
+
+.header-spacer {
+  flex: 1;
 }
 
 .header-actions {
   display: flex;
+  align-items: center;
   gap: var(--space-1);
+}
+
+.header-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
+  margin: 0 var(--space-2);
+}
+
+.text-btn-header {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.text-btn-header:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.header-divider {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+}
+
+.add-note-btn {
+  color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.add-note-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.chat-icon-btn {
+  color: var(--color-text-tertiary);
+}
+
+.chat-icon-btn.active {
+  color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.1);
 }
 
 .icon-btn {
@@ -1330,190 +1341,52 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* Chat Navigation Button */
-.chat-nav-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-2) var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
 
-.chat-nav-btn:hover {
-  background: var(--color-bg-tertiary);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.chat-nav-btn.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.chat-nav-btn svg {
-  flex-shrink: 0;
-}
-
-/* View Mode Toggle */
-.view-mode-toggle {
-  display: flex;
-  gap: var(--space-1);
-  margin: var(--space-3);
-  padding: 4px;
-  background: var(--color-bg-secondary);
-  border-radius: var(--radius-lg);
-}
-
-.mode-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-tertiary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.mode-btn:hover:not(:disabled) {
-  color: var(--color-text-secondary);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.mode-btn.active {
-  background: var(--color-bg-primary);
-  color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.mode-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Add Source Zone with Drag & Drop */
-.add-source-zone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: var(--space-2) var(--space-3) var(--space-2);
-  padding: var(--space-3);
-  background: transparent;
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-height: 48px;
-}
-
-.add-source-zone:hover {
-  border-color: var(--color-primary);
-  background: rgba(99, 102, 241, 0.04);
-}
-
-.add-source-zone.drag-over {
-  border-color: var(--color-primary);
-  background: rgba(99, 102, 241, 0.1);
-  border-style: solid;
-}
-
-.add-source-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.add-source-zone:hover .add-source-content {
-  color: var(--color-primary);
-}
-
-.add-source-content svg {
-  transition: transform 0.2s ease;
-}
-
-.add-source-zone:hover .add-source-content svg {
-  transform: scale(1.1);
-}
-
-.drop-indicator {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--color-primary);
-  font-size: 12px;
-  font-weight: 600;
-  animation: pulse-drop 1s ease-in-out infinite;
-}
-
-.drop-hint {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--color-text-tertiary);
-}
 
 @keyframes pulse-drop {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
 
-.source-actions {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.text-btn {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0;
-}
-
-.text-btn:hover {
-  text-decoration: underline;
-}
-
 .source-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-2);
+  padding: var(--space-1);
+  position: relative;
 }
 
-/* Source Items - NotebookLM style */
+.source-list.drag-over {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.drop-indicator-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  margin: var(--space-1);
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 500;
+  animation: pulse-drop 1s ease-in-out infinite;
+}
+
+/* Source Items - Compact style */
 .source-item {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
   cursor: default;
-  transition: all 0.15s ease;
-  margin-bottom: var(--space-1);
+  transition: all 0.12s ease;
+  margin-bottom: 1px;
   border: 1px solid transparent;
+  min-height: 32px;
 }
 
 .source-item:hover {
@@ -1537,10 +1410,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .source-checkbox {
@@ -1552,10 +1425,10 @@ onUnmounted(() => {
 }
 
 .checkbox-custom {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--color-border);
-  border-radius: 4px;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 3px;
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
@@ -1581,7 +1454,50 @@ onUnmounted(() => {
   border-color: var(--color-primary);
 }
 
-/* Source Content with Icon */
+/* Source Content - Compact */
+.source-content-compact {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+}
+
+.source-content-compact:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.source-content-compact .source-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.source-tag-inline {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Legacy Source Content with Icon - kept for compatibility */
 .source-content {
   flex: 1;
   min-width: 0;
@@ -1598,75 +1514,6 @@ onUnmounted(() => {
   background: rgba(99, 102, 241, 0.08);
 }
 
-.source-icon {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-tertiary);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-}
-
-.source-item.selected .source-icon {
-  background: rgba(99, 102, 241, 0.15);
-  color: var(--color-primary);
-}
-
-/* File type icon colors */
-.source-icon.type-code {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-}
-
-.source-icon.type-checklist {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-}
-
-.source-icon.type-link {
-  background: rgba(59, 130, 246, 0.12);
-  color: #3b82f6;
-}
-
-.source-icon.type-meeting {
-  background: rgba(139, 92, 246, 0.12);
-  color: #8b5cf6;
-}
-
-.source-icon.type-idea {
-  background: rgba(236, 72, 153, 0.12);
-  color: #ec4899;
-}
-
-/* Source tags */
-.source-tags {
-  display: flex;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.source-tag {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 5px;
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--color-primary);
-  border-radius: var(--radius-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.source-tag-more {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 5px;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-tertiary);
-  border-radius: var(--radius-sm);
-}
 
 /* Hover Preview */
 .source-hover-preview {
@@ -1674,8 +1521,8 @@ onUnmounted(() => {
   left: 100%;
   top: 0;
   margin-left: var(--space-2);
-  width: 280px;
-  max-height: 200px;
+  width: 260px;
+  max-height: 180px;
   padding: var(--space-3);
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
@@ -1683,15 +1530,46 @@ onUnmounted(() => {
   box-shadow: var(--shadow-lg);
   z-index: 100;
   overflow: hidden;
-  animation: fadeIn 0.15s ease;
+  animation: fadeIn 0.12s ease;
+}
+
+.preview-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .preview-content {
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 11px;
+  line-height: 1.5;
   color: var(--color-text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
+  max-height: 100px;
+  overflow: hidden;
+}
+
+.preview-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.preview-tag {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
 }
 
 @keyframes fadeIn {
@@ -1907,41 +1785,17 @@ onUnmounted(() => {
   position: relative;
 }
 
-.source-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.source-title {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.source-preview {
-  display: block;
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
-}
 
 .source-menu {
   opacity: 0;
   background: none;
   border: none;
-  padding: 4px;
+  padding: 2px;
   cursor: pointer;
   color: var(--color-text-tertiary);
   border-radius: var(--radius-sm);
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
 }
 
 .source-item:hover .source-menu {
@@ -1957,37 +1811,42 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--space-8) var(--space-4);
+  padding: var(--space-6) var(--space-3);
   text-align: center;
 }
 
 .empty-icon {
   color: var(--color-text-tertiary);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.empty-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .empty-sources p {
   margin: 0;
-  font-size: 14px;
+  font-size: 12px;
   color: var(--color-text-secondary);
 }
 
 .add-source-btn {
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
 }
 
 .sources-footer {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--color-border-light);
-  font-size: 12px;
+  font-size: 10px;
   color: var(--color-text-tertiary);
 }
 

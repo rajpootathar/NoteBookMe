@@ -1,12 +1,150 @@
-// AI service - uses backend proxy for secure API key handling
+// AI service - supports both backend proxy and direct LLM API calls
 const getAuthToken = () => localStorage.getItem('auth_token');
+
+function getLLMSettings() {
+  const saved = localStorage.getItem('llm_settings');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+}
+
+function hasCustomLLMSettings() {
+  const settings = getLLMSettings();
+  return settings && settings.endpoint && settings.model &&
+         (settings.provider === 'ollama' || settings.apiKey);
+}
 
 export const aiService = {
   async chat(messages, options = {}) {
+    // Check if user has configured custom LLM settings
+    const llmSettings = getLLMSettings();
+
+    if (hasCustomLLMSettings()) {
+      // Use direct API call to user's configured endpoint
+      return this.chatDirect(messages, options, llmSettings);
+    }
+
+    // Fall back to backend proxy
+    return this.chatProxy(messages, options);
+  },
+
+  async chatDirect(messages, options = {}, settings) {
+    // Use Claude-specific handler for Anthropic
+    if (settings.provider === 'anthropic') {
+      return this.chatClaude(messages, options, settings);
+    }
+
+    try {
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+
+      // Add API key if not using Ollama
+      if (settings.apiKey && settings.provider !== 'ollama') {
+        headers['Authorization'] = `Bearer ${settings.apiKey}`;
+      }
+
+      // OpenRouter requires additional headers
+      if (settings.provider === 'openrouter') {
+        headers['HTTP-Referer'] = window.location.origin;
+        headers['X-Title'] = 'NotebookME';
+      }
+
+      const response = await fetch(`${settings.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: options.model || settings.model,
+          messages: messages,
+          temperature: options.temperature ?? 0.7,
+          max_tokens: options.maxTokens ?? 2000
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+        throw new Error(error.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || '';
+    } catch (error) {
+      console.error('Direct LLM API error:', error);
+      throw error;
+    }
+  },
+
+  // Claude/Anthropic has a different API format
+  async chatClaude(messages, options = {}, settings) {
+    try {
+      // Extract system message if present
+      let systemPrompt = '';
+      const chatMessages = [];
+
+      for (const msg of messages) {
+        if (msg.role === 'system') {
+          systemPrompt = msg.content;
+        } else {
+          chatMessages.push({
+            role: msg.role,
+            content: msg.content
+          });
+        }
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': settings.apiKey,
+        'anthropic-version': '2023-06-01'
+      };
+
+      const body = {
+        model: options.model || settings.model,
+        max_tokens: options.maxTokens ?? 2000,
+        messages: chatMessages
+      };
+
+      // Add system prompt if present
+      if (systemPrompt) {
+        body.system = systemPrompt;
+      }
+
+      // Add temperature if specified
+      if (options.temperature !== undefined) {
+        body.temperature = options.temperature;
+      }
+
+      const response = await fetch(`${settings.endpoint}/v1/messages`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+        throw new Error(error.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      // Claude returns content as an array of content blocks
+      const textContent = data.content?.find(c => c.type === 'text');
+      return textContent?.text || '';
+    } catch (error) {
+      console.error('Claude API error:', error);
+      throw error;
+    }
+  },
+
+  async chatProxy(messages, options = {}) {
     try {
       const token = getAuthToken();
       if (!token) {
-        throw new Error('Not authenticated. Please log in.');
+        throw new Error('Not authenticated. Please log in or configure LLM settings.');
       }
 
       const response = await fetch('/api/ai/chat', {
@@ -33,7 +171,7 @@ export const aiService = {
       const data = await response.json();
       return data.content;
     } catch (error) {
-      console.error('AI service error:', error);
+      console.error('AI proxy error:', error);
       throw error;
     }
   },

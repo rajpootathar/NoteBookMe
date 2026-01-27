@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar.vue';
 import NotebookView from './components/NotebookView.vue';
 import QuickCapture from './components/QuickCapture.vue';
 import LoginPage from './components/LoginPage.vue';
+import SettingsModal from './components/SettingsModal.vue';
 import { authService } from './services/authService';
 import { useStore } from './stores/useStore.js';
 
@@ -14,6 +15,7 @@ const mobileMenuOpen = ref(false);
 const isAuthenticated = ref(false);
 const isCheckingAuth = ref(true);
 const showNewNotebookModal = ref(false);
+const showSettingsModal = ref(false);
 const newNotebookName = ref('');
 const newNotebookEmoji = ref('📓');
 
@@ -65,6 +67,15 @@ function closeNotebookModal() {
   newNotebookEmoji.value = '📓';
 }
 
+function handleOpenSettings() {
+  showSettingsModal.value = true;
+}
+
+function handleSettingsSaved(settings) {
+  // Settings saved, aiService will pick them up on next call
+  console.log('Settings saved:', settings);
+}
+
 // Expose quick capture to window for easy access
 if (typeof window !== 'undefined') {
   window.openQuickCapture = () => {
@@ -87,6 +98,7 @@ if (typeof window !== 'undefined') {
     <Sidebar
       @selectNotebook="selectNotebook"
       @addNotebook="handleAddNotebook"
+      @openSettings="handleOpenSettings"
       @logout="handleLogout"
       :class="{ 'mobile-visible': mobileMenuOpen }"
     />
@@ -99,6 +111,13 @@ if (typeof window !== 'undefined') {
       <NotebookView :notebookId="currentNotebookId" />
     </main>
     <QuickCapture ref="quickCaptureRef" @noteCreated="onNoteCreated" />
+
+    <!-- Settings Modal -->
+    <SettingsModal
+      v-if="showSettingsModal"
+      @close="showSettingsModal = false"
+      @saved="handleSettingsSaved"
+    />
 
     <!-- New Notebook Modal -->
     <div v-if="showNewNotebookModal" class="modal-overlay" @click.self="closeNotebookModal">
