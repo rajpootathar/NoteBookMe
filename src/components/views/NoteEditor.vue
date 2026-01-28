@@ -22,6 +22,17 @@
       </div>
 
       <div class="header-right">
+        <!-- Notebook Switcher -->
+        <div class="notebook-selector" v-if="notebooks.length > 1">
+          <select v-model="localNote.notebookId" @change="handleNotebookChange" class="notebook-select">
+            <option v-for="nb in notebooks" :key="nb.id" :value="nb.id">
+              {{ nb.name }}
+            </option>
+          </select>
+          <svg class="select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </div>
         <button @click="toggleVersions" class="action-btn" :class="{ active: showVersions }">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
              <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -39,30 +50,30 @@
     </div>
 
     <div class="title-section">
-      <input
-        v-model="localNote.title"
-        @input="handleTitleChange"
-        class="note-title-input"
-        placeholder="Untitled note..."
-      >
-      <div class="tags-section">
-        <div class="tags-list">
-          <span v-for="tag in localNote.tags" :key="tag" class="tag-chip">
+      <div class="title-row">
+        <input
+          v-model="localNote.title"
+          @input="handleTitleChange"
+          class="note-title-input"
+          placeholder="Untitled note..."
+        >
+        <div class="tags-inline">
+          <span v-for="tag in localNote.tags" :key="tag" class="tag-chip-inline">
             <span class="tag-text">{{ tag }}</span>
-            <button @click="removeTag(tag)" class="tag-remove">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button @click="removeTag(tag)" class="tag-remove-inline">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
             </button>
           </span>
+          <input
+            v-model="tagInput"
+            @keydown="handleTagInput"
+            class="tag-input-inline"
+            placeholder="+ tag"
+            type="text"
+          >
         </div>
-        <input
-          v-model="tagInput"
-          @keydown="handleTagInput"
-          class="tag-input"
-          placeholder="Add tag..."
-          type="text"
-        >
       </div>
     </div>
 
@@ -77,6 +88,7 @@
         :noteId="localNote.id"
         :noteContent="localNote.content"
         :notes="[localNote]"
+        :singleNoteMode="true"
         @close="toggleChat"
         @updateNote="handleUpdateNote"
       />
@@ -158,10 +170,14 @@ const props = defineProps({
   showBackButton: {
     type: Boolean,
     default: false
+  },
+  notebooks: {
+    type: Array,
+    default: () => []
   }
 });
 
-const emit = defineEmits(['goBack']);
+const emit = defineEmits(['goBack', 'notebookChanged']);
 
 const store = useStore();
 const localNote = ref({
@@ -298,6 +314,32 @@ function handleTitleChange() {
 function handleContentChange() {
   scheduleAutoSave();
   scheduleIdleVersionCheck();
+}
+
+async function handleNotebookChange() {
+  // Update note's notebook assignment
+  if (!localNote.value.id || !localNote.value.notebookId) return;
+
+  try {
+    await store.updateNote(localNote.value.id, {
+      notebookId: localNote.value.notebookId
+    });
+    emit('notebookChanged', localNote.value.notebookId);
+    saveStatus.value = 'Moved';
+    showSavedIndicator.value = true;
+    setTimeout(() => {
+      showSavedIndicator.value = false;
+      saveStatus.value = '';
+    }, 2000);
+  } catch (error) {
+    console.error('Failed to move note:', error);
+    saveStatus.value = 'Move failed';
+    showErrorIndicator.value = true;
+    setTimeout(() => {
+      showErrorIndicator.value = false;
+      saveStatus.value = '';
+    }, 2000);
+  }
 }
 
 // Schedule version creation after idle period (Google Docs style)
@@ -954,27 +996,149 @@ onUnmounted(async () => {
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 }
 
+/* Notebook Selector */
+.notebook-selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.notebook-select {
+  appearance: none;
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notebook-select:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.notebook-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  color: var(--color-text-tertiary);
+}
+
 /* Title Section */
 .title-section {
-  padding: var(--space-6) var(--space-6);
+  padding: var(--space-4) var(--space-6);
   background: var(--color-bg-elevated);
   border-bottom: 1px solid var(--color-border-light);
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .note-title-input {
-  width: 100%;
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
+  flex: 1;
+  min-width: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
   border: none;
   background: transparent;
   outline: none;
   padding: 0;
-  margin-bottom: var(--space-4);
   color: var(--color-text-primary);
   caret-color: var(--color-primary);
   transition: color 0.2s ease;
+}
+
+/* Inline Tags */
+.tags-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.tag-chip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--color-primary);
+  transition: all 0.15s ease;
+}
+
+.tag-chip-inline:nth-child(3n+2) {
+  background: rgba(6, 182, 212, 0.1);
+  color: #06b6d4;
+}
+
+.tag-chip-inline:nth-child(3n+3) {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.tag-remove-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.5;
+  transition: all 0.15s ease;
+}
+
+.tag-remove-inline:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-danger);
+}
+
+.tag-input-inline {
+  width: 60px;
+  padding: 2px 6px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  transition: all 0.15s ease;
+}
+
+.tag-input-inline:focus {
+  width: 100px;
+  border-color: var(--color-primary);
+  border-style: solid;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
 }
 
 .note-title-input:focus {

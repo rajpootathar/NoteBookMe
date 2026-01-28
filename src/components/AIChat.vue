@@ -215,6 +215,10 @@ const props = defineProps({
   notes: {
     type: Array,
     default: () => []
+  },
+  singleNoteMode: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -381,7 +385,11 @@ async function sendMessage() {
     let response;
     let sources = [];
 
-    if (props.noteContent) {
+    if (props.noteContent && props.singleNoteMode) {
+      // Single note mode: chat directly with current note only (no RAG)
+      response = await aiService.chatWithNote(props.noteContent, message);
+      sources = ['Current note'];
+    } else if (props.noteContent) {
       // Use RAG to find related notes and enhance the response
       const ragResult = await ragService.askAboutNote(
         props.noteId,

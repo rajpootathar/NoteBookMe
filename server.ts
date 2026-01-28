@@ -19,7 +19,7 @@ import {
 
 import { initEmbeddings, generateNoteEmbedding } from './services/embeddingService.js';
 import { authenticateUser, generateToken, createAuthMiddleware, initDefaultUser } from './services/authService.js';
-import { semanticSearch, buildRAGContext, formatRAGSystemPrompt, formatCitations } from './services/ragService.js';
+import { semanticSearch, hybridSearch, buildRAGContext, formatRAGSystemPrompt, formatCitations } from './services/ragService.js';
 
 const __dirname = __dirname_early;
 
@@ -439,15 +439,18 @@ async function handleUpdateChat(req: Request, id: string): Promise<Response> {
 async function handleSemanticSearch(req: Request): Promise<Response> {
   return withAuth(req, async () => {
     try {
-      const { query, topK = 5, notebookId = null } = await parseBody(req) as {
-        query?: string; topK?: number; notebookId?: string | null;
+      const { query, topK = 5, notebookId = null, useHybrid = true } = await parseBody(req) as {
+        query?: string; topK?: number; notebookId?: string | null; useHybrid?: boolean;
       };
 
       if (!query || typeof query !== 'string') {
         return error('Query is required', 400);
       }
 
-      const results = await semanticSearch(query, topK, notebookId);
+      // Use hybrid search by default for better results
+      const results = useHybrid
+        ? await hybridSearch(query, topK, notebookId)
+        : await semanticSearch(query, topK, notebookId);
       return json(results);
     } catch (err) {
       console.error('Semantic search error:', err);
@@ -459,22 +462,24 @@ async function handleSemanticSearch(req: Request): Promise<Response> {
 async function handleRAGContext(req: Request): Promise<Response> {
   return withAuth(req, async () => {
     try {
-      const { question, topK = 5, notebookId = null } = await parseBody(req) as {
-        question?: string; topK?: number; notebookId?: string | null;
+      const { question, topK = 5, notebookId = null, useHybrid = true, useChunking = false } = await parseBody(req) as {
+        question?: string; topK?: number; notebookId?: string | null; useHybrid?: boolean; useChunking?: boolean;
       };
 
       if (!question || typeof question !== 'string') {
         return error('Question is required', 400);
       }
 
-      const ragContext = await buildRAGContext(question, topK, notebookId);
+      const ragContext = await buildRAGContext(question, topK, notebookId, { useHybrid, useChunking });
 
       return json({
         context: ragContext.context,
         sources: ragContext.sources,
         hasContext: ragContext.hasContext,
         systemPrompt: formatRAGSystemPrompt(ragContext),
-        citations: formatCitations(ragContext.sources)
+        citations: formatCitations(ragContext.sources),
+        retrievalMethod: ragContext.retrievalMethod,
+        resultCount: ragContext.resultCount
       });
     } catch (err) {
       console.error('RAG context error:', err);

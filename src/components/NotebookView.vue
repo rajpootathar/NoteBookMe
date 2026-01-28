@@ -194,8 +194,10 @@
             ref="noteEditorRef"
             :noteId="editingNoteId"
             :showBackButton="true"
+            :notebooks="store.state.notebooks"
             @goBack="closeEditor"
             @saved="onNoteSaved"
+            @notebookChanged="onNoteNotebookChanged"
           />
         </div>
       </template>
@@ -763,6 +765,15 @@ function closeEditor() {
 
 function onNoteSaved() {
   store.loadNotes();
+}
+
+function onNoteNotebookChanged(newNotebookId) {
+  // Reload notes to refresh the list
+  store.loadNotes();
+  // If we're in a specific notebook view and note was moved out, close editor
+  if (props.notebookId && newNotebookId !== props.notebookId) {
+    closeEditor();
+  }
 }
 
 function openSourceMenu(note, event) {
