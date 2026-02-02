@@ -83,37 +83,36 @@ function getMaxTokens(length, context) {
  * Build the prompt for completion
  */
 function buildPrompt(context, length) {
-  const headingContext = context.headings.length > 0
-    ? `Current section: ${context.headings.join(' > ')}\n`
-    : '';
+  // Only use current line for more focused completion
+  const currentLine = context.currentLine.trim();
 
   let instruction = '';
   switch (length) {
     case 'minimal':
-      instruction = 'Complete with just a few words (3-5 words max).';
+      instruction = 'Add 2-5 words to complete the thought.';
       break;
     case 'balanced':
-      instruction = 'Complete the current thought naturally (one sentence max).';
+      instruction = 'Add a short phrase to complete this line naturally.';
       break;
     case 'generous':
       if (context.endsWithPeriod) {
-        instruction = 'Suggest the next sentence that would naturally follow.';
+        instruction = 'Suggest the next sentence.';
       } else {
-        instruction = 'Complete the current sentence naturally.';
+        instruction = 'Complete this sentence naturally.';
       }
       break;
   }
 
   return {
-    system: `You are a writing assistant. Complete the user's text naturally.
-${headingContext}
-Rules:
-- ${instruction}
-- Match the writing style and tone
-- Don't repeat what's already written
-- Return ONLY the completion text, nothing else
-- If the text seems complete, return empty string`,
-    user: `Text to complete:\n${context.paragraph}`
+    system: `You are an autocomplete assistant. Continue the user's text directly.
+
+CRITICAL RULES:
+- Output ONLY the continuation, nothing else
+- Do NOT repeat any text the user already wrote
+- Start your response where their text ends
+- Keep it short and natural
+- If text seems complete, return empty`,
+    user: `Continue this: "${currentLine}"`
   };
 }
 

@@ -685,47 +685,26 @@ function updateGhostTextPosition() {
   if (!ta || !suggestion.value) return;
 
   const style = getComputedStyle(ta);
+  const paddingLeft = parseInt(style.paddingLeft) || 0;
+  const paddingTop = parseInt(style.paddingTop) || 0;
+  const lineHeight = parseFloat(style.lineHeight) || 28.8; // 16px * 1.8
 
-  // Create a mirror div to measure exact cursor position
-  const mirror = document.createElement('div');
-  mirror.style.cssText = `
-    position: absolute;
-    visibility: hidden;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    font-family: ${style.fontFamily};
-    font-size: ${style.fontSize};
-    font-weight: ${style.fontWeight};
-    line-height: ${style.lineHeight};
-    letter-spacing: ${style.letterSpacing};
-    padding: ${style.padding};
-    border: ${style.border};
-    box-sizing: border-box;
-    width: ${ta.offsetWidth}px;
-  `;
-
-  // Text before cursor
+  // Get text before cursor
   const textBeforeCursor = localContent.value.substring(0, ta.selectionStart);
+  const lines = textBeforeCursor.split('\n');
+  const currentLineIndex = lines.length - 1;
+  const currentLineText = lines[currentLineIndex];
 
-  // Create text node and marker
-  const textNode = document.createTextNode(textBeforeCursor);
-  const marker = document.createElement('span');
-  marker.textContent = '|';
+  // Create a canvas to measure text width accurately
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 
-  mirror.appendChild(textNode);
-  mirror.appendChild(marker);
-  document.body.appendChild(mirror);
+  const textWidth = ctx.measureText(currentLineText).width;
 
-  // Get marker position relative to mirror
-  const mirrorRect = mirror.getBoundingClientRect();
-  const markerRect = marker.getBoundingClientRect();
-
-  // Calculate position relative to textarea
-  const top = markerRect.top - mirrorRect.top - ta.scrollTop;
-  const left = markerRect.left - mirrorRect.left;
-
-  document.body.removeChild(mirror);
+  // Calculate position
+  const top = paddingTop + (currentLineIndex * lineHeight) - ta.scrollTop;
+  const left = paddingLeft + textWidth;
 
   ghostTextStyle.value = {
     top: `${top}px`,
