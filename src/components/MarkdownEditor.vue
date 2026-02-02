@@ -684,24 +684,52 @@ function updateGhostTextPosition() {
   const ta = textarea.value;
   if (!ta || !suggestion.value) return;
 
-  // Use a hidden element to measure cursor position
   const style = getComputedStyle(ta);
-  const lineHeight = parseInt(style.lineHeight);
-  const paddingTop = parseInt(style.paddingTop);
-  const paddingLeft = parseInt(style.paddingLeft);
 
-  // Count lines before cursor
+  // Create a mirror div to measure exact cursor position
+  const mirror = document.createElement('div');
+  mirror.style.cssText = `
+    position: absolute;
+    visibility: hidden;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    font-family: ${style.fontFamily};
+    font-size: ${style.fontSize};
+    font-weight: ${style.fontWeight};
+    line-height: ${style.lineHeight};
+    letter-spacing: ${style.letterSpacing};
+    padding: ${style.padding};
+    border: ${style.border};
+    box-sizing: border-box;
+    width: ${ta.offsetWidth}px;
+  `;
+
+  // Text before cursor
   const textBeforeCursor = localContent.value.substring(0, ta.selectionStart);
-  const lines = textBeforeCursor.split('\n');
-  const currentLineIndex = lines.length - 1;
-  const currentLineText = lines[currentLineIndex];
 
-  // Approximate character width
-  const charWidth = 9.6; // Average for 16px font
+  // Create text node and marker
+  const textNode = document.createTextNode(textBeforeCursor);
+  const marker = document.createElement('span');
+  marker.textContent = '|';
+
+  mirror.appendChild(textNode);
+  mirror.appendChild(marker);
+  document.body.appendChild(mirror);
+
+  // Get marker position relative to mirror
+  const mirrorRect = mirror.getBoundingClientRect();
+  const markerRect = marker.getBoundingClientRect();
+
+  // Calculate position relative to textarea
+  const top = markerRect.top - mirrorRect.top - ta.scrollTop;
+  const left = markerRect.left - mirrorRect.left;
+
+  document.body.removeChild(mirror);
 
   ghostTextStyle.value = {
-    top: `${paddingTop + (currentLineIndex * lineHeight) - ta.scrollTop}px`,
-    left: `${paddingLeft + (currentLineText.length * charWidth)}px`
+    top: `${top}px`,
+    left: `${left}px`
   };
 }
 
@@ -987,15 +1015,19 @@ watch(() => props.modelValue, () => {
   position: absolute;
   pointer-events: none;
   z-index: 1;
+  /* Match textarea exactly */
   font-family: var(--font-sans);
   font-size: 16px;
+  font-weight: 400;
   line-height: 1.8;
+  white-space: pre;
 }
 
 .ghost-text {
-  color: var(--color-text-tertiary);
+  color: #9ca3af;
   font-style: italic;
-  opacity: 0.6;
+  opacity: 0.7;
+  background: transparent;
 }
 
 /* Preview Pane */

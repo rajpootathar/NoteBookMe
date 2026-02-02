@@ -66,15 +66,16 @@ export function buildContext(content, cursorPos) {
 function getMaxTokens(length, context) {
   const afterSentence = context.endsWithPeriod || context.endsWithNewline;
 
+  // Minimum 50 tokens - some models (like Gemini) don't work well with very low limits
   switch (length) {
     case 'minimal':
-      return 15;
+      return 50;
     case 'balanced':
-      return afterSentence ? 30 : 20;
+      return afterSentence ? 80 : 60;
     case 'generous':
-      return afterSentence ? 50 : 30;
+      return afterSentence ? 120 : 80;
     default:
-      return 20;
+      return 60;
   }
 }
 
