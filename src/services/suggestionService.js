@@ -1,55 +1,19 @@
 /**
- * AI Suggestion Service
- * Provides inline text suggestions using frontend settings (same as chat)
+ * AI Suggestion Service - Inline text suggestions
+ * Uses llmProvider for all LLM calls
  */
+
+import { llmProvider } from './llmProvider.js';
 
 // Debounce state
 let debounceTimer = null;
 let abortController = null;
 
-// Rate limiting
-let lastRequestTime = 0;
-let cooldownUntil = 0;
-const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests
-const ERROR_COOLDOWN = 10000;      // 10 second cooldown after errors
-
 /**
- * Get LLM settings from localStorage
- */
-function getLLMSettings() {
-  const saved = localStorage.getItem('llm_settings');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {
-      return null;
-    }
-  }
-  return null;
-}
-
-/**
- * Get AI suggestion settings from localStorage
+ * Get suggestion settings (convenience re-export)
  */
 export function getSettings() {
-  const llmSettings = getLLMSettings();
-  if (llmSettings?.aiSuggestions) {
-    return llmSettings.aiSuggestions;
-  }
-  return {
-    enabled: false,
-    triggerMode: 'smart',
-    length: 'balanced'
-  };
-}
-
-/**
- * Check if LLM is properly configured
- */
-function hasLLMConfig() {
-  const settings = getLLMSettings();
-  return settings && settings.endpoint && settings.model &&
-         (settings.provider === 'ollama' || settings.apiKey);
+  return llmProvider.getSuggestionSettings();
 }
 
 /**
@@ -115,7 +79,7 @@ function getMaxTokens(length, context) {
 }
 
 /**
- * Build the prompt for the AI
+ * Build the prompt for completion
  */
 function buildPrompt(context, length) {
   const headingContext = context.headings.length > 0
@@ -139,134 +103,34 @@ function buildPrompt(context, length) {
       break;
   }
 
-  return `You are a writing assistant. Complete the user's text naturally.
+  return {
+    system: `You are a writing assistant. Complete the user's text naturally.
 ${headingContext}
 Rules:
 - ${instruction}
 - Match the writing style and tone
 - Don't repeat what's already written
 - Return ONLY the completion text, nothing else
-- If the text seems complete, return empty string
-
-Text to complete:
-${context.paragraph}`;
-}
-
-/**
- * Call the AI directly using frontend settings
- */
-async function callAI(prompt, maxTokens, signal) {
-  const settings = getLLMSettings();
-
-  if (!settings || !settings.endpoint || !settings.model) {
-    throw new Error('LLM not configured');
-  }
-
-  const headers = {
-    'Content-Type': 'application/json'
+- If the text seems complete, return empty string`,
+    user: `Text to complete:\n${context.paragraph}`
   };
-
-  // Add API key if not Ollama
-  if (settings.apiKey && settings.provider !== 'ollama') {
-    headers['Authorization'] = `Bearer ${settings.apiKey}`;
-  }
-
-  // OpenRouter requires additional headers
-  if (settings.provider === 'openrouter') {
-    headers['HTTP-Referer'] = window.location.origin;
-    headers['X-Title'] = 'NotebookME';
-  }
-
-  // Handle Anthropic separately (different API format)
-  if (settings.provider === 'anthropic') {
-    return callAnthropicAI(settings, prompt, maxTokens, signal);
-  }
-
-  const response = await fetch(`${settings.endpoint}/chat/completions`, {
-    method: 'POST',
-    headers,
-    signal,
-    body: JSON.stringify({
-      model: settings.model,
-      messages: [
-        { role: 'system', content: 'You are a concise writing assistant. Provide only the completion text, no explanations.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: Math.min(maxTokens, 100)
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    const errorMsg = error.error?.message || `API error: ${response.status}`;
-
-    // Set cooldown on rate limit errors
-    if (response.status === 429) {
-      cooldownUntil = Date.now() + ERROR_COOLDOWN;
-    }
-
-    throw new Error(errorMsg);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content?.trim() || '';
-}
-
-/**
- * Call Anthropic API (different format)
- */
-async function callAnthropicAI(settings, prompt, maxTokens, signal) {
-  const response = await fetch(`${settings.endpoint}/v1/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': settings.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    signal,
-    body: JSON.stringify({
-      model: settings.model,
-      max_tokens: Math.min(maxTokens, 100),
-      system: 'You are a concise writing assistant. Provide only the completion text, no explanations.',
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    if (response.status === 429) {
-      cooldownUntil = Date.now() + ERROR_COOLDOWN;
-    }
-    throw new Error(error.error?.message || `API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.content?.[0]?.text?.trim() || '';
 }
 
 /**
  * Request a suggestion from the AI
  */
 export async function getSuggestion(content, cursorPos, options = {}) {
-  const aiSettings = getSettings();
-  const length = options.length || aiSettings.length;
+  const settings = getSettings();
+  const length = options.length || settings.length;
 
-  // Check rate limiting
-  const now = Date.now();
-  if (now < cooldownUntil) {
-    console.log('Suggestion skipped: in cooldown');
-    return '';
-  }
-  if (now - lastRequestTime < MIN_REQUEST_INTERVAL) {
-    console.log('Suggestion skipped: too soon');
-    return '';
-  }
-
-  // Check if LLM is configured
-  if (!hasLLMConfig()) {
+  // Check if configured and rate limiting
+  if (!llmProvider.isConfigured()) {
     console.log('Suggestion skipped: LLM not configured');
+    return '';
+  }
+
+  if (!llmProvider.canMakeRequest()) {
+    console.log('Suggestion skipped: rate limited');
     return '';
   }
 
@@ -287,11 +151,19 @@ export async function getSuggestion(content, cursorPos, options = {}) {
   const prompt = buildPrompt(context, length);
 
   try {
-    lastRequestTime = Date.now();
-    const suggestion = await callAI(prompt, maxTokens, abortController.signal);
+    const suggestion = await llmProvider.prompt(
+      prompt.system,
+      prompt.user,
+      {
+        maxTokens,
+        temperature: 0.7,
+        signal: abortController.signal,
+        rateLimit: true
+      }
+    );
 
     // Clean up suggestion
-    let result = suggestion.trim();
+    let result = (suggestion || '').trim();
 
     // Add leading space if needed
     const lastChar = context.currentLine.slice(-1);
@@ -349,3 +221,5 @@ export const suggestionService = {
   getSuggestionDebounced,
   cancelSuggestion
 };
+
+export default suggestionService;
