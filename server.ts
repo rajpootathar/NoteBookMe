@@ -538,6 +538,63 @@ async function handleAIChat(req: Request): Promise<Response> {
   });
 }
 
+// AI Suggestion Handler (for inline completions)
+async function handleAISuggest(req: Request): Promise<Response> {
+  return withAuth(req, async () => {
+    try {
+      if (!AI_API_URL || !AI_API_KEY) {
+        return error('AI not configured. Set AI_API_URL and AI_API_KEY in .env');
+      }
+
+      const { prompt, maxTokens = 20, context } = await parseBody(req) as {
+        prompt?: string;
+        maxTokens?: number;
+        context?: { paragraph?: string; headings?: string[] };
+      };
+
+      if (!prompt || typeof prompt !== 'string') {
+        return error('Prompt is required', 400);
+      }
+
+      const response = await fetch(`${AI_API_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${AI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: AI_MODEL_NAME,
+          messages: [
+            { role: 'system', content: 'You are a concise writing assistant. Provide only the completion text, no explanations or extra formatting.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: Math.min(maxTokens, 100), // Cap at 100 tokens for safety
+          stream: false
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('AI Suggest API error:', response.status, errorText);
+        return error(`AI API error: ${response.status}`, response.status);
+      }
+
+      const data = await response.json() as { choices: { message: { content: string } }[]; usage: unknown };
+      const suggestion = data.choices[0]?.message?.content || '';
+
+      return json({
+        suggestion: suggestion.trim(),
+        usage: data.usage
+      });
+    } catch (err: unknown) {
+      console.error('AI suggest error:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      return error('AI suggestion failed', 500, message);
+    }
+  });
+}
+
 // Export Handler
 async function handleExport(req: Request): Promise<Response> {
   return withAuth(req, async () => {
@@ -696,6 +753,9 @@ async function handleRequest(req: Request): Promise<Response> {
     }
     if (pathname === '/api/ai/chat' && method === 'POST') {
       return handleAIChat(req);
+    }
+    if (pathname === '/api/ai/suggest' && method === 'POST') {
+      return handleAISuggest(req);
     }
 
     // Export route

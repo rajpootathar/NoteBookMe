@@ -85,6 +85,44 @@
             {{ testResult.message }}
           </span>
         </div>
+
+        <section class="settings-section" style="margin-top: var(--space-5);">
+          <h3>AI Writing Assistance</h3>
+          <p class="section-desc">Get intelligent suggestions as you write. Uses tokens from your configured provider.</p>
+
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Enable inline suggestions</span>
+              <button
+                type="button"
+                :class="['toggle-switch', { active: settings.aiSuggestions.enabled }]"
+                @click="settings.aiSuggestions.enabled = !settings.aiSuggestions.enabled"
+              >
+                <span class="toggle-knob"></span>
+              </button>
+            </label>
+          </div>
+
+          <div class="form-group" v-if="settings.aiSuggestions.enabled">
+            <label>Trigger Mode</label>
+            <select v-model="settings.aiSuggestions.triggerMode">
+              <option value="manual">Manual (Ctrl+Space)</option>
+              <option value="smart">Smart (on pause)</option>
+              <option value="full">Full automatic</option>
+            </select>
+            <span class="form-hint">{{ getTriggerModeHint() }}</span>
+          </div>
+
+          <div class="form-group" v-if="settings.aiSuggestions.enabled">
+            <label>Suggestion Length</label>
+            <select v-model="settings.aiSuggestions.length">
+              <option value="minimal">Minimal (few words)</option>
+              <option value="balanced">Balanced (sentence)</option>
+              <option value="generous">Generous (next sentence)</option>
+            </select>
+            <span class="form-hint">{{ getLengthHint() }}</span>
+          </div>
+        </section>
       </div>
 
       <div class="settings-footer">
@@ -131,7 +169,13 @@ const settings = reactive({
   provider: 'openai',
   endpoint: '',
   apiKey: '',
-  model: ''
+  model: '',
+  // AI Writing Assistance
+  aiSuggestions: {
+    enabled: false,
+    triggerMode: 'smart', // 'manual' | 'smart' | 'full'
+    length: 'balanced'    // 'minimal' | 'balanced' | 'generous'
+  }
 });
 
 const canTest = computed(() => {
@@ -150,14 +194,27 @@ function loadSettings() {
   const saved = localStorage.getItem('llm_settings');
   if (saved) {
     const parsed = JSON.parse(saved);
+    // Handle legacy settings without aiSuggestions
+    if (!parsed.aiSuggestions) {
+      parsed.aiSuggestions = {
+        enabled: false,
+        triggerMode: 'smart',
+        length: 'balanced'
+      };
+    }
     Object.assign(settings, parsed);
   } else {
     // Default settings
     settings.provider = 'openai';
     settings.endpoint = PROVIDER_ENDPOINTS.openai;
     settings.model = PROVIDER_MODELS.openai;
+    settings.aiSuggestions = {
+      enabled: false,
+      triggerMode: 'smart',
+      length: 'balanced'
+    };
   }
-  originalSettings.value = { ...settings };
+  originalSettings.value = JSON.parse(JSON.stringify(settings));
 }
 
 function onProviderChange() {
@@ -181,6 +238,24 @@ function getModelHint() {
     custom: 'Enter the model name for your API'
   };
   return hints[settings.provider] || '';
+}
+
+function getTriggerModeHint() {
+  const hints = {
+    manual: 'Press Ctrl+Space to request a suggestion. Most token-efficient.',
+    smart: 'Suggestions appear after you pause typing (1-2 seconds). Balanced.',
+    full: 'Suggestions appear as you type with debouncing. Uses most tokens.'
+  };
+  return hints[settings.aiSuggestions.triggerMode] || '';
+}
+
+function getLengthHint() {
+  const hints = {
+    minimal: 'Just a few words to complete your current thought.',
+    balanced: 'Complete your sentence naturally.',
+    generous: 'Suggests the next sentence after you finish one.'
+  };
+  return hints[settings.aiSuggestions.length] || '';
 }
 
 async function testConnection() {
@@ -525,5 +600,56 @@ onMounted(() => {
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Toggle Switch */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.toggle-label span {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.toggle-switch:hover {
+  border-color: var(--color-primary);
+}
+
+.toggle-switch.active {
+  background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
+  border-color: var(--color-primary);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch.active .toggle-knob {
+  transform: translateX(20px);
 }
 </style>

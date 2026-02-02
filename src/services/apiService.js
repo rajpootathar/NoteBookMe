@@ -22,6 +22,30 @@ async function handleResponse(response) {
     return response.json();
 }
 
+export const apiService = {
+    // ============ Generic Methods ============
+    async post(endpoint, data, options = {}) {
+        // Handle endpoints that start with /api/ or just /
+        const path = endpoint.startsWith('/api/') ? endpoint.slice(4) : endpoint;
+        const response = await fetch(`${API_BASE}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify(data),
+            ...options
+        });
+        return handleResponse(response);
+    },
+
+    async get(endpoint, options = {}) {
+        const path = endpoint.startsWith('/api/') ? endpoint.slice(4) : endpoint;
+        const response = await fetch(`${API_BASE}${path}`, {
+            headers: getAuthHeader(),
+            ...options
+        });
+        return handleResponse(response);
+    },
+};
+
 export const api = {
     // ============ Auth ============
     async login(username, password) {

@@ -96,16 +96,38 @@
     </div>
 
     <div class="editor-container" :class="[`view-${activeView}`]">
-      <textarea
-        v-show="activeView !== 'preview'"
-        ref="textarea"
-        v-model="localContent"
-        @input="onInput"
-        @keydown.tab.prevent="onTab"
-        @scroll="onTextareaScroll"
-        placeholder="Start writing your thoughts... Markdown is supported"
-        class="editor-textarea"
-      ></textarea>
+      <!-- Editor wrapper for ghost text overlay -->
+      <div v-show="activeView !== 'preview'" class="editor-wrapper">
+        <textarea
+          ref="textarea"
+          v-model="localContent"
+          @input="onInput"
+          @keydown="onKeydown"
+          @scroll="onTextareaScroll"
+          @blur="onBlur"
+          placeholder="Start writing... Type / for commands"
+          class="editor-textarea"
+        ></textarea>
+
+        <!-- Ghost text suggestion overlay -->
+        <div
+          v-if="suggestion && aiSettings.enabled"
+          class="ghost-text-overlay"
+          :style="ghostTextStyle"
+        >
+          <span class="ghost-text">{{ suggestion }}</span>
+        </div>
+      </div>
+
+      <!-- Slash command menu -->
+      <SlashCommandMenu
+        ref="slashMenuRef"
+        :visible="showSlashMenu"
+        :position="slashMenuPosition"
+        :filter="slashFilter"
+        @select="onSlashCommand"
+        @close="closeSlashMenu"
+      />
 
       <!-- Simple divider with sync toggle -->
       <div v-if="activeView === 'split'" class="split-divider">
@@ -132,14 +154,20 @@
         @scroll="onPreviewScroll"
       ></div>
     </div>
+
+    <!-- Help Panel -->
+    <HelpPanel />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
+import SlashCommandMenu from './SlashCommandMenu.vue';
+import HelpPanel from './HelpPanel.vue';
+import { suggestionService } from '../services/suggestionService.js';
 
 marked.setOptions({
   highlight: function(code, lang) {
@@ -163,17 +191,53 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
+// Core state
 const localContent = ref(props.modelValue);
 const textarea = ref(null);
 const previewPane = ref(null);
-const activeView = ref('write'); // 'write', 'preview', or 'split'
-const syncScroll = ref(true); // Sync scroll enabled by default
+const activeView = ref('write');
+const syncScroll = ref(true);
+
+// Slash command state
+const showSlashMenu = ref(false);
+const slashMenuPosition = ref({ top: 0, left: 0 });
+const slashFilter = ref('');
+const slashStartPos = ref(0);
+const slashMenuRef = ref(null);
+
+// AI suggestion state
+const suggestion = ref('');
+const suggestionPending = ref(false);
+const ghostTextStyle = ref({});
+const aiSettings = ref(suggestionService.getSettings());
+
+// Debounce timers
+let suggestionTimer = null;
+let inputTimer = null;
+
+// Load AI settings
+function loadAISettings() {
+  aiSettings.value = suggestionService.getSettings();
+}
+
+// Watch for settings changes
+onMounted(() => {
+  loadAISettings();
+  window.addEventListener('storage', loadAISettings);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('storage', loadAISettings);
+  if (suggestionTimer) clearTimeout(suggestionTimer);
+  if (inputTimer) clearTimeout(inputTimer);
+  suggestionService.cancelSuggestion();
+});
 
 const renderedMarkdown = computed(() => {
   return marked(localContent.value || '');
 });
 
-// Simple percentage-based sync scroll
+// ============ Scroll Sync ============
 let scrollSource = null;
 let rafId = null;
 
@@ -233,7 +297,6 @@ function toggleSyncAndAlign() {
   syncScroll.value = !syncScroll.value;
 
   if (syncScroll.value) {
-    // Align preview to textarea position
     requestAnimationFrame(() => {
       const ta = textarea.value;
       const preview = previewPane.value;
@@ -251,10 +314,398 @@ function toggleSyncAndAlign() {
   }
 }
 
-function onInput() {
+// ============ Input Handling ============
+function onInput(e) {
   emit('update:modelValue', localContent.value);
+
+  // Clear suggestion on input
+  suggestion.value = '';
+
+  // Check for slash command
+  checkSlashCommand();
+
+  // Check for markdown prefix formatting
+  checkMarkdownPrefix();
+
+  // Trigger AI suggestion based on settings
+  if (aiSettings.value.enabled) {
+    triggerSuggestion();
+  }
 }
 
+function onBlur() {
+  // Delay closing to allow click on menu
+  setTimeout(() => {
+    if (showSlashMenu.value) {
+      closeSlashMenu();
+    }
+  }, 150);
+}
+
+// ============ Keyboard Handling ============
+function onKeydown(e) {
+  // Handle slash menu navigation
+  if (showSlashMenu.value) {
+    if (['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
+      slashMenuRef.value?.handleKeydown(e);
+      return;
+    }
+    // Continue typing to filter
+    if (e.key === 'Backspace') {
+      const ta = textarea.value;
+      if (ta.selectionStart <= slashStartPos.value) {
+        closeSlashMenu();
+      }
+    }
+  }
+
+  // Handle AI suggestion
+  if (suggestion.value && aiSettings.value.enabled) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      acceptSuggestion();
+      return;
+    }
+    if (e.key === 'ArrowRight' && !e.shiftKey) {
+      // Accept word by word
+      const cursorAtEnd = textarea.value.selectionStart === localContent.value.length;
+      if (cursorAtEnd) {
+        e.preventDefault();
+        acceptWordFromSuggestion();
+        return;
+      }
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      suggestion.value = '';
+      return;
+    }
+  }
+
+  // Manual suggestion trigger (Ctrl+Space)
+  if (e.key === ' ' && e.ctrlKey && aiSettings.value.enabled) {
+    e.preventDefault();
+    requestSuggestion();
+    return;
+  }
+
+  // Tab for indentation (when no suggestion)
+  if (e.key === 'Tab' && !suggestion.value) {
+    e.preventDefault();
+    insertText('  ');
+    return;
+  }
+
+  // Handle wrapper shortcuts
+  handleWrapperShortcut(e);
+}
+
+// ============ Markdown Prefix Detection ============
+function checkMarkdownPrefix() {
+  const ta = textarea.value;
+  if (!ta) return;
+
+  const pos = ta.selectionStart;
+  const content = localContent.value;
+
+  // Get current line
+  const lineStart = content.lastIndexOf('\n', pos - 1) + 1;
+  const lineEnd = content.indexOf('\n', pos);
+  const currentLine = content.substring(lineStart, lineEnd === -1 ? content.length : lineEnd);
+
+  // Check if we just typed a space after a markdown prefix
+  const beforeCursor = content.substring(lineStart, pos);
+
+  // Patterns to detect (with space)
+  const prefixPatterns = [
+    { pattern: /^#{1,3} $/, keep: true },       // Headings
+    { pattern: /^[-*] $/, keep: true },          // Bullet
+    { pattern: /^\d+\. $/, keep: true },         // Numbered
+    { pattern: /^> $/, keep: true },             // Quote
+    { pattern: /^- \[ \] $/, keep: true },       // Todo
+  ];
+
+  // This is handled visually in CSS - no transformation needed
+  // The preview pane shows the formatted version
+}
+
+// ============ Wrapper Shortcuts ============
+function handleWrapperShortcut(e) {
+  const ta = textarea.value;
+  if (!ta) return;
+
+  const wrappers = {
+    '*': { double: '**', single: '*' },
+    '_': { double: '__', single: '_' },
+    '`': { single: '`' },
+    '~': { double: '~~' }
+  };
+
+  const wrapper = wrappers[e.key];
+  if (!wrapper) return;
+
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const hasSelection = start !== end;
+
+  // If there's a selection, wrap it
+  if (hasSelection) {
+    e.preventDefault();
+    const selectedText = localContent.value.substring(start, end);
+    const wrap = wrapper.double || wrapper.single;
+    const newText = wrap + selectedText + wrap;
+
+    localContent.value =
+      localContent.value.substring(0, start) +
+      newText +
+      localContent.value.substring(end);
+
+    emit('update:modelValue', localContent.value);
+
+    nextTick(() => {
+      ta.focus();
+      const wrapLen = wrap.length;
+      ta.setSelectionRange(start + wrapLen, end + wrapLen);
+    });
+  }
+}
+
+// ============ Slash Commands ============
+function checkSlashCommand() {
+  const ta = textarea.value;
+  if (!ta) return;
+
+  const pos = ta.selectionStart;
+  const content = localContent.value;
+
+  // Find the start of current line
+  const lineStart = content.lastIndexOf('\n', pos - 1) + 1;
+  const textBeforeCursor = content.substring(lineStart, pos);
+
+  // Check if we have a slash command in progress
+  const slashMatch = textBeforeCursor.match(/\/([a-z0-9]*)$/i);
+
+  if (slashMatch) {
+    if (!showSlashMenu.value) {
+      // Starting a new slash command
+      slashStartPos.value = pos - slashMatch[0].length;
+      showSlashMenu.value = true;
+      updateSlashMenuPosition();
+    }
+    slashFilter.value = slashMatch[1] || '';
+  } else if (showSlashMenu.value) {
+    closeSlashMenu();
+  }
+}
+
+function updateSlashMenuPosition() {
+  const ta = textarea.value;
+  if (!ta) return;
+
+  // Get cursor position in textarea
+  const rect = ta.getBoundingClientRect();
+
+  // Create a temporary element to measure cursor position
+  const mirror = document.createElement('div');
+  const style = getComputedStyle(ta);
+
+  mirror.style.cssText = `
+    position: absolute;
+    visibility: hidden;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: ${style.fontFamily};
+    font-size: ${style.fontSize};
+    line-height: ${style.lineHeight};
+    padding: ${style.padding};
+    width: ${ta.clientWidth}px;
+  `;
+
+  const textBeforeCursor = localContent.value.substring(0, slashStartPos.value);
+  mirror.textContent = textBeforeCursor;
+
+  const marker = document.createElement('span');
+  marker.textContent = '/';
+  mirror.appendChild(marker);
+
+  document.body.appendChild(mirror);
+
+  const markerRect = marker.getBoundingClientRect();
+  const mirrorRect = mirror.getBoundingClientRect();
+
+  document.body.removeChild(mirror);
+
+  // Calculate position relative to textarea
+  const relativeTop = markerRect.top - mirrorRect.top;
+  const relativeLeft = markerRect.left - mirrorRect.left;
+
+  slashMenuPosition.value = {
+    top: rect.top + relativeTop + parseInt(style.lineHeight) + ta.scrollTop * -1 + 24,
+    left: rect.left + relativeLeft
+  };
+}
+
+function onSlashCommand(cmd) {
+  const ta = textarea.value;
+  if (!ta) return;
+
+  // Remove the slash command text
+  const beforeSlash = localContent.value.substring(0, slashStartPos.value);
+  const afterCursor = localContent.value.substring(ta.selectionStart);
+
+  localContent.value = beforeSlash + cmd.insert + afterCursor;
+  emit('update:modelValue', localContent.value);
+
+  closeSlashMenu();
+
+  nextTick(() => {
+    ta.focus();
+    const newPos = slashStartPos.value + cmd.cursorOffset;
+    ta.setSelectionRange(newPos, newPos);
+  });
+}
+
+function closeSlashMenu() {
+  showSlashMenu.value = false;
+  slashFilter.value = '';
+  slashStartPos.value = 0;
+}
+
+// ============ AI Suggestions ============
+function triggerSuggestion() {
+  if (!aiSettings.value.enabled) return;
+
+  const mode = aiSettings.value.triggerMode;
+
+  // Clear existing timer
+  if (suggestionTimer) {
+    clearTimeout(suggestionTimer);
+  }
+  suggestionService.cancelSuggestion();
+
+  if (mode === 'manual') {
+    // Don't auto-trigger in manual mode
+    return;
+  }
+
+  const delay = mode === 'full' ? 500 : 1500; // Full auto: 500ms, Smart: 1500ms
+
+  suggestionTimer = setTimeout(() => {
+    requestSuggestion();
+  }, delay);
+}
+
+async function requestSuggestion() {
+  if (!aiSettings.value.enabled) return;
+
+  const ta = textarea.value;
+  if (!ta) return;
+
+  const pos = ta.selectionStart;
+  const content = localContent.value;
+
+  // Don't suggest if slash menu is open
+  if (showSlashMenu.value) return;
+
+  // Don't suggest at start of document with no content
+  if (!content.trim()) return;
+
+  suggestionPending.value = true;
+
+  try {
+    const result = await suggestionService.getSuggestion(content, pos);
+    if (result && ta.selectionStart === pos) {
+      // Only show if cursor hasn't moved
+      suggestion.value = result;
+      updateGhostTextPosition();
+    }
+  } catch (err) {
+    console.error('Suggestion error:', err);
+  } finally {
+    suggestionPending.value = false;
+  }
+}
+
+function acceptSuggestion() {
+  if (!suggestion.value) return;
+
+  const ta = textarea.value;
+  const pos = ta.selectionStart;
+
+  localContent.value =
+    localContent.value.substring(0, pos) +
+    suggestion.value +
+    localContent.value.substring(pos);
+
+  emit('update:modelValue', localContent.value);
+
+  const newPos = pos + suggestion.value.length;
+  suggestion.value = '';
+
+  nextTick(() => {
+    ta.focus();
+    ta.setSelectionRange(newPos, newPos);
+  });
+}
+
+function acceptWordFromSuggestion() {
+  if (!suggestion.value) return;
+
+  const ta = textarea.value;
+  const pos = ta.selectionStart;
+
+  // Find first word boundary (space or end)
+  const wordMatch = suggestion.value.match(/^\S+\s?/);
+  if (!wordMatch) return;
+
+  const word = wordMatch[0];
+  const remaining = suggestion.value.substring(word.length);
+
+  localContent.value =
+    localContent.value.substring(0, pos) +
+    word +
+    localContent.value.substring(pos);
+
+  emit('update:modelValue', localContent.value);
+
+  const newPos = pos + word.length;
+  suggestion.value = remaining;
+
+  nextTick(() => {
+    ta.focus();
+    ta.setSelectionRange(newPos, newPos);
+    if (remaining) {
+      updateGhostTextPosition();
+    }
+  });
+}
+
+function updateGhostTextPosition() {
+  const ta = textarea.value;
+  if (!ta || !suggestion.value) return;
+
+  // Use a hidden element to measure cursor position
+  const style = getComputedStyle(ta);
+  const lineHeight = parseInt(style.lineHeight);
+  const paddingTop = parseInt(style.paddingTop);
+  const paddingLeft = parseInt(style.paddingLeft);
+
+  // Count lines before cursor
+  const textBeforeCursor = localContent.value.substring(0, ta.selectionStart);
+  const lines = textBeforeCursor.split('\n');
+  const currentLineIndex = lines.length - 1;
+  const currentLineText = lines[currentLineIndex];
+
+  // Approximate character width
+  const charWidth = 9.6; // Average for 16px font
+
+  ghostTextStyle.value = {
+    top: `${paddingTop + (currentLineIndex * lineHeight) - ta.scrollTop}px`,
+    left: `${paddingLeft + (currentLineText.length * charWidth)}px`
+  };
+}
+
+// ============ Text Manipulation ============
 function insertMarkdown(before, after) {
   const ta = textarea.value;
   const start = ta.selectionStart;
@@ -272,24 +723,18 @@ function insertMarkdown(before, after) {
   }, 0);
 }
 
-function onTab() {
-  insertMarkdown('  ', '');
-}
-
-
 function insertText(text) {
   const ta = textarea.value;
   if (!ta) return;
-  
+
   const start = ta.selectionStart;
   const end = ta.selectionEnd;
   const currentContent = localContent.value || '';
-  
+
   const newText = currentContent.substring(0, start) + text + currentContent.substring(end);
   localContent.value = newText;
   emit('update:modelValue', newText);
-  
-  // Restore focus and move cursor to end of inserted text
+
   setTimeout(() => {
     ta.focus();
     ta.setSelectionRange(start + text.length, start + text.length);
@@ -302,6 +747,11 @@ watch(() => props.modelValue, (newValue) => {
   if (newValue !== localContent.value) {
     localContent.value = newValue;
   }
+});
+
+// Clear suggestion when content changes externally
+watch(() => props.modelValue, () => {
+  suggestion.value = '';
 });
 </script>
 
@@ -438,14 +888,6 @@ watch(() => props.modelValue, (newValue) => {
   color: var(--color-primary);
 }
 
-.toggle-btn:first-child.active {
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
-}
-
-.toggle-btn:last-child.active {
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-}
-
 /* Split Divider */
 .split-divider {
   position: relative;
@@ -503,6 +945,14 @@ watch(() => props.modelValue, (newValue) => {
   box-shadow: none;
 }
 
+/* Editor Wrapper for Ghost Text */
+.editor-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
 .editor-textarea {
   flex: 1;
   padding: var(--space-6);
@@ -532,6 +982,22 @@ watch(() => props.modelValue, (newValue) => {
   background: rgba(99, 102, 241, 0.2);
 }
 
+/* Ghost Text Overlay */
+.ghost-text-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.ghost-text {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  opacity: 0.6;
+}
+
 /* Preview Pane */
 .editor-preview {
   flex: 1;
@@ -542,6 +1008,11 @@ watch(() => props.modelValue, (newValue) => {
 }
 
 /* View Mode Styles */
+.view-write .editor-wrapper {
+  max-width: 100%;
+  margin: 0;
+}
+
 .view-write .editor-textarea {
   max-width: 100%;
   margin: 0;
@@ -553,6 +1024,11 @@ watch(() => props.modelValue, (newValue) => {
   max-width: 100%;
   margin: 0;
   padding: var(--space-4) var(--space-6);
+}
+
+.view-split .editor-wrapper {
+  max-width: none;
+  margin: 0;
 }
 
 .view-split .editor-textarea {
@@ -690,6 +1166,10 @@ watch(() => props.modelValue, (newValue) => {
 @media (max-width: 768px) {
   .editor-container {
     flex-direction: column;
+  }
+
+  .editor-wrapper {
+    min-height: 200px;
   }
 
   .editor-textarea {
