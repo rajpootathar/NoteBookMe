@@ -588,7 +588,7 @@ function triggerSuggestion() {
     return;
   }
 
-  const delay = mode === 'full' ? 500 : 1500; // Full auto: 500ms, Smart: 1500ms
+  const delay = mode === 'full' ? 3000 : 6000; // Full auto: 3s, Smart: 6s (respects Gemini rate limits)
 
   suggestionTimer = setTimeout(() => {
     requestSuggestion();

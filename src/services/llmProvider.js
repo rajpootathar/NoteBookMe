@@ -50,8 +50,8 @@ export function isConfigured() {
 
 let lastRequestTime = 0;
 let cooldownUntil = 0;
-const MIN_REQUEST_INTERVAL = 2000;  // 2 seconds between requests
-const ERROR_COOLDOWN = 10000;       // 10 second cooldown after errors
+const MIN_REQUEST_INTERVAL = 5000;  // 5 seconds between requests (Gemini free tier)
+const ERROR_COOLDOWN = 45000;       // 45 second cooldown after errors (Gemini asks for ~42s)
 
 /**
  * Check if we can make a request (rate limiting)
