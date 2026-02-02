@@ -21,6 +21,7 @@
             <select v-model="settings.provider" @change="onProviderChange">
               <option value="openai">OpenAI</option>
               <option value="anthropic">Claude (Anthropic)</option>
+              <option value="gemini">Google Gemini</option>
               <option value="groq">Groq</option>
               <option value="openrouter">OpenRouter</option>
               <option value="together">Together AI</option>
@@ -143,6 +144,7 @@ const emit = defineEmits(['close', 'saved']);
 const PROVIDER_ENDPOINTS = {
   openai: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com',
+  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
   groq: 'https://api.groq.com/openai/v1',
   openrouter: 'https://openrouter.ai/api/v1',
   together: 'https://api.together.xyz/v1',
@@ -153,6 +155,7 @@ const PROVIDER_ENDPOINTS = {
 const PROVIDER_MODELS = {
   openai: 'gpt-4o-mini',
   anthropic: 'claude-sonnet-4-20250514',
+  gemini: 'gemini-2.0-flash',
   groq: 'llama-3.1-70b-versatile',
   openrouter: 'anthropic/claude-3.5-sonnet',
   together: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
@@ -231,6 +234,7 @@ function getModelHint() {
   const hints = {
     openai: 'e.g., gpt-4o, gpt-4o-mini, gpt-3.5-turbo',
     anthropic: 'e.g., claude-sonnet-4-20250514, claude-3-5-sonnet-20241022',
+    gemini: 'e.g., gemini-2.0-flash, gemini-1.5-pro, gemini-1.5-flash',
     groq: 'e.g., llama-3.1-70b-versatile, mixtral-8x7b-32768',
     openrouter: 'e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o',
     together: 'e.g., meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',

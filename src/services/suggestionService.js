@@ -1,26 +1,40 @@
 /**
  * AI Suggestion Service
- * Provides inline text suggestions with minimal context for token efficiency
+ * Provides inline text suggestions using frontend settings (same as chat)
  */
-
-import { apiService } from './apiService.js';
 
 // Debounce state
 let debounceTimer = null;
 let abortController = null;
 
+// Rate limiting
+let lastRequestTime = 0;
+let cooldownUntil = 0;
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests
+const ERROR_COOLDOWN = 10000;      // 10 second cooldown after errors
+
+/**
+ * Get LLM settings from localStorage
+ */
+function getLLMSettings() {
+  const saved = localStorage.getItem('llm_settings');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+}
+
 /**
  * Get AI suggestion settings from localStorage
  */
 export function getSettings() {
-  const saved = localStorage.getItem('llm_settings');
-  if (saved) {
-    const parsed = JSON.parse(saved);
-    return parsed.aiSuggestions || {
-      enabled: false,
-      triggerMode: 'smart',
-      length: 'balanced'
-    };
+  const llmSettings = getLLMSettings();
+  if (llmSettings?.aiSuggestions) {
+    return llmSettings.aiSuggestions;
   }
   return {
     enabled: false,
@@ -30,21 +44,26 @@ export function getSettings() {
 }
 
 /**
+ * Check if LLM is properly configured
+ */
+function hasLLMConfig() {
+  const settings = getLLMSettings();
+  return settings && settings.endpoint && settings.model &&
+         (settings.provider === 'ollama' || settings.apiKey);
+}
+
+/**
  * Extract minimal context from content around cursor
- * @param {string} content - Full document content
- * @param {number} cursorPos - Cursor position in the document
- * @returns {object} - Context object with paragraph and headings
  */
 export function buildContext(content, cursorPos) {
   const lines = content.substring(0, cursorPos).split('\n');
   const allLines = content.split('\n');
 
-  // Get current line and a few previous lines for context
   const currentLineIndex = lines.length - 1;
   const startLine = Math.max(0, currentLineIndex - 5);
   const contextLines = lines.slice(startLine);
 
-  // Extract nearby headings (look up to 20 lines back)
+  // Extract nearby headings
   const headings = [];
   const headingStart = Math.max(0, currentLineIndex - 20);
   for (let i = headingStart; i < currentLineIndex; i++) {
@@ -54,7 +73,7 @@ export function buildContext(content, cursorPos) {
     }
   }
 
-  // Get the current paragraph (text since last empty line or heading)
+  // Get current paragraph
   let paragraphStart = contextLines.length - 1;
   for (let i = contextLines.length - 1; i >= 0; i--) {
     const line = contextLines[i];
@@ -66,14 +85,12 @@ export function buildContext(content, cursorPos) {
   }
 
   const currentParagraph = contextLines.slice(paragraphStart).join('\n');
-
-  // Get the text on current line up to cursor
   const currentLine = lines[lines.length - 1] || '';
 
   return {
     paragraph: currentParagraph,
     currentLine,
-    headings: headings.slice(-3), // Last 3 headings max
+    headings: headings.slice(-3),
     endsWithPeriod: currentLine.trim().endsWith('.'),
     endsWithNewline: content.charAt(cursorPos - 1) === '\n'
   };
@@ -83,7 +100,6 @@ export function buildContext(content, cursorPos) {
  * Get max tokens based on length setting
  */
 function getMaxTokens(length, context) {
-  // After period or newline, allow more tokens for "generous" mode
   const afterSentence = context.endsWithPeriod || context.endsWithNewline;
 
   switch (length) {
@@ -137,15 +153,122 @@ ${context.paragraph}`;
 }
 
 /**
+ * Call the AI directly using frontend settings
+ */
+async function callAI(prompt, maxTokens, signal) {
+  const settings = getLLMSettings();
+
+  if (!settings || !settings.endpoint || !settings.model) {
+    throw new Error('LLM not configured');
+  }
+
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+
+  // Add API key if not Ollama
+  if (settings.apiKey && settings.provider !== 'ollama') {
+    headers['Authorization'] = `Bearer ${settings.apiKey}`;
+  }
+
+  // OpenRouter requires additional headers
+  if (settings.provider === 'openrouter') {
+    headers['HTTP-Referer'] = window.location.origin;
+    headers['X-Title'] = 'NotebookME';
+  }
+
+  // Handle Anthropic separately (different API format)
+  if (settings.provider === 'anthropic') {
+    return callAnthropicAI(settings, prompt, maxTokens, signal);
+  }
+
+  const response = await fetch(`${settings.endpoint}/chat/completions`, {
+    method: 'POST',
+    headers,
+    signal,
+    body: JSON.stringify({
+      model: settings.model,
+      messages: [
+        { role: 'system', content: 'You are a concise writing assistant. Provide only the completion text, no explanations.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: Math.min(maxTokens, 100)
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+    const errorMsg = error.error?.message || `API error: ${response.status}`;
+
+    // Set cooldown on rate limit errors
+    if (response.status === 429) {
+      cooldownUntil = Date.now() + ERROR_COOLDOWN;
+    }
+
+    throw new Error(errorMsg);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || '';
+}
+
+/**
+ * Call Anthropic API (different format)
+ */
+async function callAnthropicAI(settings, prompt, maxTokens, signal) {
+  const response = await fetch(`${settings.endpoint}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': settings.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    signal,
+    body: JSON.stringify({
+      model: settings.model,
+      max_tokens: Math.min(maxTokens, 100),
+      system: 'You are a concise writing assistant. Provide only the completion text, no explanations.',
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+    if (response.status === 429) {
+      cooldownUntil = Date.now() + ERROR_COOLDOWN;
+    }
+    throw new Error(error.error?.message || `API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.content?.[0]?.text?.trim() || '';
+}
+
+/**
  * Request a suggestion from the AI
- * @param {string} content - Full document content
- * @param {number} cursorPos - Cursor position
- * @param {object} options - Override settings
- * @returns {Promise<string>} - The suggestion text
  */
 export async function getSuggestion(content, cursorPos, options = {}) {
-  const settings = getSettings();
-  const length = options.length || settings.length;
+  const aiSettings = getSettings();
+  const length = options.length || aiSettings.length;
+
+  // Check rate limiting
+  const now = Date.now();
+  if (now < cooldownUntil) {
+    console.log('Suggestion skipped: in cooldown');
+    return '';
+  }
+  if (now - lastRequestTime < MIN_REQUEST_INTERVAL) {
+    console.log('Suggestion skipped: too soon');
+    return '';
+  }
+
+  // Check if LLM is configured
+  if (!hasLLMConfig()) {
+    console.log('Suggestion skipped: LLM not configured');
+    return '';
+  }
 
   // Cancel any pending request
   if (abortController) {
@@ -155,7 +278,7 @@ export async function getSuggestion(content, cursorPos, options = {}) {
 
   const context = buildContext(content, cursorPos);
 
-  // Don't suggest if line is empty and no context
+  // Don't suggest if no context
   if (!context.paragraph.trim() && !context.headings.length) {
     return '';
   }
@@ -164,56 +287,36 @@ export async function getSuggestion(content, cursorPos, options = {}) {
   const prompt = buildPrompt(context, length);
 
   try {
-    const response = await apiService.post('/api/ai/suggest', {
-      prompt,
-      maxTokens,
-      context: {
-        paragraph: context.paragraph,
-        headings: context.headings
-      }
-    }, {
-      signal: abortController.signal
-    });
+    lastRequestTime = Date.now();
+    const suggestion = await callAI(prompt, maxTokens, abortController.signal);
 
-    if (response.suggestion) {
-      // Clean up the suggestion
-      let suggestion = response.suggestion.trim();
+    // Clean up suggestion
+    let result = suggestion.trim();
 
-      // Remove any leading space if current line doesn't end with space
-      const lastChar = context.currentLine.slice(-1);
-      if (lastChar && lastChar !== ' ' && suggestion.startsWith(' ')) {
-        // Keep the space, it's needed
-      } else if (!lastChar || lastChar === ' ') {
-        suggestion = suggestion.trimStart();
-      }
-
-      return suggestion;
+    // Add leading space if needed
+    const lastChar = context.currentLine.slice(-1);
+    if (lastChar && lastChar !== ' ' && result && !result.startsWith(' ')) {
+      result = ' ' + result;
     }
 
-    return '';
+    return result;
   } catch (error) {
     if (error.name === 'AbortError') {
       return '';
     }
-    console.error('Suggestion error:', error);
+    console.error('Suggestion error:', error.message);
     return '';
   }
 }
 
 /**
  * Request suggestion with debouncing
- * @param {string} content - Full document content
- * @param {number} cursorPos - Cursor position
- * @param {number} delay - Debounce delay in ms
- * @param {function} callback - Called with suggestion result
  */
 export function getSuggestionDebounced(content, cursorPos, delay, callback) {
-  // Clear existing timer
   if (debounceTimer) {
     clearTimeout(debounceTimer);
   }
 
-  // Cancel pending request
   if (abortController) {
     abortController.abort();
     abortController = null;
