@@ -140,7 +140,7 @@ export async function getAllNotebooks() {
   const table = tables['notebooks'];
   if (!table) return [];
 
-  const results = await table.query().toArray();
+  const results = await table.query().limit(10000).toArray();
 
   // Deduplicate by ID (in case of data issues)
   const seen = new Set();
@@ -222,14 +222,26 @@ export async function deleteNotebook(id) {
 // ============ Notes ============
 export async function getAllNotes(notebookId = null) {
   const table = tables['notes'];
-  if (!table) return [];
+  if (!table) {
+    console.log('getAllNotes: notes table not found');
+    return [];
+  }
 
-  let query = table.query();
+  let query = table.query().limit(10000); // Ensure we get all notes, not just default limit
   if (notebookId) {
+    console.log('getAllNotes: filtering by notebookId:', notebookId);
     query = query.where(`\`notebookId\` = '${notebookId}'`);
+  } else {
+    console.log('getAllNotes: fetching ALL notes (no filter)');
   }
 
   const results = await query.toArray();
+  console.log('getAllNotes: raw results count:', results.length);
+
+  // Log unique notebookIds found
+  const notebookIds = [...new Set(results.map(n => n.notebookId))];
+  console.log('getAllNotes: unique notebookIds in results:', notebookIds);
+
   return results
     .map(note => ({
       ...note,
@@ -388,6 +400,7 @@ export async function getChatsByNoteId(noteId) {
 
   const results = await table.query()
     .where(`"noteId" = '${noteId}'`)
+    .limit(10000)
     .toArray();
 
   return results
@@ -402,7 +415,7 @@ export async function getAllChats() {
   const table = tables['chats'];
   if (!table) return [];
 
-  const results = await table.query().toArray();
+  const results = await table.query().limit(10000).toArray();
 
   return results
     .map(chat => ({
@@ -486,7 +499,7 @@ export async function getVersionsByNoteId(noteId) {
   }
 
   try {
-    const allResults = await tables['note_versions'].query().toArray();
+    const allResults = await tables['note_versions'].query().limit(10000).toArray();
     console.log('All versions in table:', allResults.length);
 
     const filtered = allResults.filter(v => v.noteId === noteId);
@@ -536,7 +549,7 @@ export async function createVersion(versionData) {
     }
 
     // Verify immediately using same table reference
-    const verify = await tables['note_versions'].query().toArray();
+    const verify = await tables['note_versions'].query().limit(10000).toArray();
     console.log('createVersion: Table now has', verify.length, 'rows');
     const found = verify.find(v => v.id === version.id);
     console.log('createVersion: New version found:', !!found);

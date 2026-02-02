@@ -39,8 +39,13 @@ export const useStore = () => {
 
   async function loadNotes(notebookId = null) {
     state.isLoading = true;
+    console.log('loadNotes called with notebookId:', notebookId);
     try {
       state.notes = await storage.getAllNotes(notebookId);
+      console.log('loadNotes: received', state.notes.length, 'notes');
+      // Log unique notebookIds in the loaded notes
+      const notebookIds = [...new Set(state.notes.map(n => n.notebookId))];
+      console.log('loadNotes: unique notebookIds:', notebookIds);
     } catch (error) {
       console.error('Failed to load notes:', error);
     } finally {
