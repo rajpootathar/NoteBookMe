@@ -341,15 +341,25 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.nav-item.active .notebook-name {
+  color: #e0e7ff;
 }
 
 .notebook-count {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.1);
   padding: 1px 5px;
   border-radius: 4px;
   margin-left: auto;
+}
+
+.nav-item.active .notebook-count {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.25);
 }
 
 .nav-item {
