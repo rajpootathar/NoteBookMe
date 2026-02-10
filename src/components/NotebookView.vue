@@ -512,6 +512,25 @@ const contextMenuPosition = ref({ x: 0, y: 0 });
 const showNotebookPicker = ref(false);
 const pendingSaveData = ref(null); // { type: 'generated' | 'output', data: any, messageIndex?: number }
 
+// Reset state when switching notebooks
+watch(() => props.notebookId, () => {
+  // Close any open note editor
+  editingNoteId.value = null;
+  viewMode.value = 'chat';
+
+  // Clear selected sources so auto-select picks up new notebook's notes
+  selectedSources.value = new Set();
+
+  // Clear chat context from previous notebook
+  messages.value = [];
+  userInput.value = '';
+
+  // Clear generated content
+  generatedOutput.value = null;
+  generatedTitle.value = '';
+  audioScript.value = null;
+});
+
 // Auto-select sources when notes load
 watch(notes, (newNotes) => {
   if (newNotes.length > 0 && selectedSources.value.size === 0) {
