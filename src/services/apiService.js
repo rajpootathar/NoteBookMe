@@ -186,6 +186,16 @@ export const api = {
         return handleResponse(response);
     },
 
+    // ============ File Upload ============
+    async uploadFiles(formData) {
+        const response = await fetch(`${API_BASE}/upload`, {
+            method: 'POST',
+            headers: getAuthHeader(),
+            body: formData,
+        });
+        return handleResponse(response);
+    },
+
     async createNoteVersion(noteId, content, title) {
         // Generate ID client-side
         const response = await fetch(`${API_BASE}/notes/${noteId}/versions`, {

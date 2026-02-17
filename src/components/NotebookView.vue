@@ -16,6 +16,21 @@
               <path d="M12 5v14M5 12h14"/>
             </svg>
           </button>
+          <button @click="triggerFileUpload" class="icon-btn upload-btn" title="Upload files">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </button>
+          <input
+            ref="fileInputRef"
+            type="file"
+            multiple
+            accept=".pdf,.docx,.doc,.txt,.md,.csv,.json,.html,.xml,.yaml,.yml"
+            @change="handleFileUpload"
+            style="display:none"
+          >
           <button @click="closeEditor" class="icon-btn chat-icon-btn" :class="{ active: !editingNoteId }" title="Chat">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -446,6 +461,7 @@ import { marked } from 'marked';
 import { useStore } from '../stores/useStore.js';
 import { ragService } from '../services/ragService.js';
 import { aiService } from '../services/ai.js';
+import { api } from '../services/apiService.js';
 import NoteEditor from './views/NoteEditor.vue';
 
 const props = defineProps({
@@ -502,6 +518,8 @@ const messagesContainerMini = ref(null);
 
 // Drag & drop
 const isDragging = ref(false);
+const fileInputRef = ref(null);
+const isUploading = ref(false);
 const hoveredNoteId = ref(null);
 
 // Context menu
@@ -671,15 +689,15 @@ async function handleDrop(e) {
           console.error('Failed to create note from file:', error);
         }
       }
-      // For PDF, DOC, XLSX - these need server-side processing
-      else if (['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.pptx'].includes(ext)) {
-        pendingServerProcess.push(file.name);
+      // For PDF, DOC, DOCX - upload to server for parsing
+      else if (['.pdf', '.doc', '.docx'].includes(ext)) {
+        pendingServerProcess.push(file);
       }
     }
 
-    // Notify about files that need server processing
+    // Upload binary files to server for parsing
     if (pendingServerProcess.length > 0) {
-      alert(`The following files need server-side processing (coming soon):\n${pendingServerProcess.join('\n')}\n\nCurrently supported: .txt, .md, .json, .csv, .html, .xml, .yaml`);
+      await uploadFilesToServer(pendingServerProcess);
     }
 
     // Open the last created note
@@ -690,6 +708,90 @@ async function handleDrop(e) {
       viewMode.value = 'editor';
     }
   }
+}
+
+async function uploadFilesToServer(files) {
+  isUploading.value = true;
+  try {
+    const formData = new FormData();
+    const notebookId = props.notebookId || store.state.notebooks[0]?.id;
+    formData.append('notebookId', notebookId);
+    for (const file of files) {
+      formData.append('files', file);
+    }
+    const createdNotes = await api.uploadFiles(formData);
+    for (const note of createdNotes) {
+      if (note && note.id) {
+        selectedSources.value.add(note.id);
+      }
+    }
+    await store.loadNotes();
+    selectedSources.value = new Set(selectedSources.value);
+  } catch (err) {
+    console.error('Failed to upload files:', err);
+    alert('Failed to process uploaded files. Please try again.');
+  } finally {
+    isUploading.value = false;
+  }
+}
+
+function triggerFileUpload() {
+  fileInputRef.value?.click();
+}
+
+async function handleFileUpload(e) {
+  const files = Array.from(e.target.files || []);
+  if (files.length === 0) return;
+
+  const textExts = ['.md', '.txt', '.json', '.csv', '.html', '.xml', '.yaml', '.yml'];
+  const serverFiles = [];
+
+  for (const file of files) {
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+    if (file.type.startsWith('text/') || textExts.includes(ext)) {
+      // Handle text files client-side
+      const content = await file.text();
+      const title = file.name.replace(/\.[^/.]+$/, '');
+      const tags = ['imported', 'file'];
+      if (ext === '.md') tags.push('markdown');
+      if (ext === '.json') tags.push('json');
+      if (ext === '.csv') tags.push('csv');
+
+      try {
+        const newNote = await store.createNote({
+          title,
+          content,
+          tags,
+          notebookId: props.notebookId || store.state.notebooks[0]?.id
+        });
+        if (newNote?.id) {
+          selectedSources.value.add(newNote.id);
+        }
+      } catch (err) {
+        console.error('Failed to create note from file:', err);
+      }
+    } else {
+      serverFiles.push(file);
+    }
+  }
+
+  if (serverFiles.length > 0) {
+    await uploadFilesToServer(serverFiles);
+  }
+
+  await store.loadNotes();
+  selectedSources.value = new Set(selectedSources.value);
+
+  // Open the last created note
+  if (notes.value.length > 0) {
+    const lastNote = notes.value[notes.value.length - 1];
+    editingNoteId.value = lastNote.id;
+    viewMode.value = 'editor';
+  }
+
+  // Reset file input
+  if (fileInputRef.value) fileInputRef.value.value = '';
 }
 
 function toggleSource(id) {
@@ -1326,6 +1428,15 @@ onUnmounted(() => {
 
 .add-note-btn:hover {
   background: rgba(99, 102, 241, 0.2);
+}
+
+.upload-btn {
+  color: var(--color-text-tertiary);
+}
+
+.upload-btn:hover {
+  color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.1);
 }
 
 .chat-icon-btn {

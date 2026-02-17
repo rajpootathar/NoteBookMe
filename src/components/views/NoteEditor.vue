@@ -33,6 +33,14 @@
             <path d="M6 9l6 6 6-6"/>
           </svg>
         </div>
+        <button @click="exportNotePdf" class="action-btn" title="Export as PDF">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>PDF</span>
+        </button>
         <button @click="toggleVersions" class="action-btn" :class="{ active: showVersions }">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
              <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -74,6 +82,25 @@
             type="text"
           >
         </div>
+      </div>
+    </div>
+
+    <!-- AI Format Banner for imported notes -->
+    <div v-if="showImportBanner" class="import-format-banner">
+      <div class="banner-content">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+        <span>Imported from {{ importSourceType }}. Formatting may be imperfect.</span>
+        <button @click="aiFormatNote" class="banner-btn" :disabled="isAIFormatting">
+          {{ isAIFormatting ? 'Formatting...' : 'Format with AI' }}
+        </button>
+        <button @click="dismissImportBanner" class="banner-dismiss" title="Dismiss">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -159,7 +186,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import MarkdownEditor from '../MarkdownEditor.vue';
 import AIChat from '../AIChat.vue';
 import { useStore } from '../../stores/useStore.js';
@@ -200,6 +227,27 @@ const tagInput = ref('');
 const editorRef = ref(null);
 
 const saveStatus = ref('');
+
+// Import banner state
+const bannerDismissed = ref(false);
+const isAIFormatting = ref(false);
+
+const isImportedNote = computed(() => {
+  const tags = localNote.value.tags || [];
+  return tags.includes('imported') && (tags.includes('pdf') || tags.includes('docx') || tags.includes('doc'));
+});
+
+const importSourceType = computed(() => {
+  const tags = localNote.value.tags || [];
+  if (tags.includes('pdf')) return 'PDF';
+  if (tags.includes('docx')) return 'DOCX';
+  if (tags.includes('doc')) return 'DOC';
+  return 'file';
+});
+
+const showImportBanner = computed(() => {
+  return isImportedNote.value && !bannerDismissed.value;
+});
 
 // Version history tracking - Google Docs style
 const versionSnapshot = ref({ content: '', title: '' }); // Content at last version save
@@ -616,6 +664,72 @@ function toggleChat() {
   showChat.value = !showChat.value;
 }
 
+function exportNotePdf() {
+  if (!localNote.value.id) return;
+  const token = localStorage.getItem('auth_token');
+  const url = `/api/notes/${localNote.value.id}/export/pdf`;
+  // Open in new tab with auth — fetch as blob then open
+  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => { if (!r.ok) throw new Error('Export failed'); return r.blob(); })
+    .then(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+    })
+    .catch(err => console.error('PDF export failed:', err));
+}
+
+function dismissImportBanner() {
+  bannerDismissed.value = true;
+}
+
+async function aiFormatNote() {
+  if (!localNote.value.id || isAIFormatting.value) return;
+
+  isAIFormatting.value = true;
+  pushToUndoStack();
+  await createVersion(true);
+
+  try {
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(`/api/notes/${localNote.value.id}/ai-format`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'AI formatting failed');
+    }
+
+    const updated = await response.json();
+    localNote.value.content = updated.content;
+    await saveNote();
+
+    versionSnapshot.value = {
+      content: localNote.value.content,
+      title: localNote.value.title
+    };
+
+    saveStatus.value = 'AI formatted (Ctrl+Z to undo)';
+    showSavedIndicator.value = true;
+    bannerDismissed.value = true;
+    setTimeout(() => {
+      showSavedIndicator.value = false;
+      saveStatus.value = '';
+    }, 3000);
+  } catch (err) {
+    console.error('AI format failed:', err);
+    saveStatus.value = 'Format failed';
+    showErrorIndicator.value = true;
+    setTimeout(() => {
+      showErrorIndicator.value = false;
+      saveStatus.value = '';
+    }, 3000);
+  } finally {
+    isAIFormatting.value = false;
+  }
+}
+
 async function handleUpdateNote({ type, content }) {
   // 1. Push current state to undo stack (for Ctrl+Z)
   pushToUndoStack();
@@ -685,6 +799,7 @@ function removeTag(tag) {
 async function loadNote() {
   // Stop existing timers when loading new note
   stopPeriodicVersionCheck();
+  bannerDismissed.value = false;
 
   if (props.noteId) {
     const note = await storage.getNote(props.noteId);
@@ -728,14 +843,8 @@ function handleKeydown(e) {
   // Ctrl/Cmd + B for bold
   if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
     e.preventDefault();
-    const textarea = document.querySelector('.editor-textarea');
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const text = localNote.value.content;
-      const selected = text.substring(start, end);
-      localNote.value.content = text.substring(0, start) + '**' + selected + '**' + text.substring(end);
-      scheduleAutoSave();
+    if (editorRef.value?.insertMarkdown) {
+      editorRef.value.insertMarkdown('**', '**');
     }
   }
 }
@@ -1252,6 +1361,69 @@ onUnmounted(async () => {
 
 .tag-input::placeholder {
   color: var(--color-text-tertiary);
+}
+
+/* Import Format Banner */
+.import-format-banner {
+  padding: 6px var(--space-5);
+  background: rgba(99, 102, 241, 0.08);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.banner-content svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.banner-content span {
+  flex: 1;
+}
+
+.banner-btn {
+  padding: 3px 12px;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.banner-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.banner-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.banner-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.banner-dismiss:hover {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* Editor Body */

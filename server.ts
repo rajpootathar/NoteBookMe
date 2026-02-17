@@ -20,6 +20,8 @@ import {
 import { initEmbeddings, generateNoteEmbedding } from './services/embeddingService.js';
 import { authenticateUser, generateToken, createAuthMiddleware, initDefaultUser } from './services/authService.js';
 import { semanticSearch, hybridSearch, buildRAGContext, formatRAGSystemPrompt, formatCitations } from './services/ragService.js';
+import { parseFile } from './services/fileParser.js';
+import { noteToPrintHtml, notebookToPrintHtml } from './services/pdfExporter.js';
 
 const __dirname = __dirname_early;
 
@@ -595,6 +597,171 @@ async function handleAISuggest(req: Request): Promise<Response> {
   });
 }
 
+// AI Format Handler — restructure imported note content as clean markdown
+async function handleAIFormat(req: Request, noteId: string): Promise<Response> {
+  return withAuth(req, async () => {
+    try {
+      if (!AI_API_URL || !AI_API_KEY) {
+        return error('AI not configured. Set AI_API_URL and AI_API_KEY in .env');
+      }
+
+      const note = await getNoteById(noteId);
+      if (!note) return error('Note not found', 404);
+
+      const content = (note as { content?: string }).content || '';
+      if (!content.trim()) return error('Note has no content to format', 400);
+
+      const aiResponse = await fetch(`${AI_API_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${AI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: AI_MODEL_NAME,
+          messages: [
+            {
+              role: 'system',
+              content: `You are a document formatting assistant. Your task is to restructure raw text (often extracted from PDFs) into clean, well-organized markdown.
+
+Rules:
+- Preserve ALL original content — do not remove, summarize, or rewrite anything
+- Fix broken lines and merge fragmented sentences
+- Add proper markdown headings (# ## ###) based on document structure
+- Format lists as proper markdown lists (- or 1.)
+- Wrap code snippets in backtick blocks
+- Format tables as markdown tables if detected
+- Remove page numbers, headers/footers, and other artifacts
+- Ensure proper paragraph spacing
+- Do NOT add any content that wasn't in the original
+- Output ONLY the formatted markdown, no explanations`
+            },
+            {
+              role: 'user',
+              content: `Format this extracted document text as clean markdown:\n\n${content}`
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 4000,
+          stream: false
+        })
+      });
+
+      if (!aiResponse.ok) {
+        const errText = await aiResponse.text();
+        console.error('AI format error:', aiResponse.status, errText);
+        return error('AI formatting failed', 502);
+      }
+
+      const data = await aiResponse.json() as { choices: { message: { content: string } }[] };
+      const formatted = data.choices[0]?.message?.content || '';
+
+      if (!formatted.trim()) {
+        return error('AI returned empty response', 502);
+      }
+
+      // Update note with formatted content
+      const vector = await generateNoteEmbedding({
+        title: (note as { title?: string }).title,
+        content: formatted,
+        tags: (note as { tags?: string[] }).tags
+      });
+
+      const updated = await updateNote(noteId, { content: formatted }, vector);
+      return json(updated);
+    } catch (err) {
+      console.error('AI format error:', err);
+      return error('Failed to format note with AI');
+    }
+  });
+}
+
+// File Upload Handler
+async function handleUpload(req: Request): Promise<Response> {
+  return withAuth(req, async () => {
+    try {
+      const formData = await req.formData();
+      const notebookId = formData.get('notebookId') as string;
+      const files = formData.getAll('files') as File[];
+
+      if (!files || files.length === 0) {
+        return error('No files provided', 400);
+      }
+
+      const createdNotes: unknown[] = [];
+
+      for (const file of files) {
+        const buffer = await file.arrayBuffer();
+        const parsed = await parseFile(buffer, file.name, file.type);
+
+        const vector = await generateNoteEmbedding({
+          title: parsed.title,
+          content: parsed.content,
+          tags: parsed.tags
+        });
+
+        const note = await createNote({
+          notebookId: notebookId || undefined,
+          title: parsed.title,
+          content: parsed.content,
+          tags: parsed.tags
+        }, vector);
+
+        createdNotes.push(note);
+      }
+
+      return json(createdNotes);
+    } catch (err) {
+      console.error('Upload error:', err);
+      return error('Failed to process uploaded files');
+    }
+  });
+}
+
+// Note PDF Export Handler
+async function handleNoteExportPdf(req: Request, noteId: string): Promise<Response> {
+  return withAuth(req, async () => {
+    try {
+      const note = await getNoteById(noteId);
+      if (!note) return error('Note not found', 404);
+
+      const html = noteToPrintHtml(note);
+      return new Response(html, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `inline; filename="${(note.title || 'note').replace(/[^a-z0-9_\-. ]/gi, '_')}.html"`
+        }
+      });
+    } catch (err) {
+      console.error('Note PDF export error:', err);
+      return error('Failed to export note');
+    }
+  });
+}
+
+// Notebook PDF Export Handler
+async function handleNotebookExportPdf(req: Request, notebookId: string): Promise<Response> {
+  return withAuth(req, async () => {
+    try {
+      const notebook = await getNotebookById(notebookId);
+      if (!notebook) return error('Notebook not found', 404);
+
+      const notes = await getAllNotes(notebookId);
+      const html = notebookToPrintHtml(notes, notebook.name);
+
+      return new Response(html, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `inline; filename="${(notebook.name || 'notebook').replace(/[^a-z0-9_\-. ]/gi, '_')}.html"`
+        }
+      });
+    } catch (err) {
+      console.error('Notebook PDF export error:', err);
+      return error('Failed to export notebook');
+    }
+  });
+}
+
 // Export Handler
 async function handleExport(req: Request): Promise<Response> {
   return withAuth(req, async () => {
@@ -702,6 +869,24 @@ async function handleRequest(req: Request): Promise<Response> {
       return handleDeleteNotebook(req, id);
     }
 
+    // Notebook PDF export route
+    if (matchPath(pathname, '/api/notebooks/:id/export/pdf') && method === 'GET') {
+      const id = pathname.split('/')[3];
+      return handleNotebookExportPdf(req, id);
+    }
+
+    // Note export routes (must come before generic note routes)
+    if (matchPath(pathname, '/api/notes/:id/export/pdf') && method === 'GET') {
+      const id = pathname.split('/')[3];
+      return handleNoteExportPdf(req, id);
+    }
+
+    // AI format route (must come before generic note routes)
+    if (matchPath(pathname, '/api/notes/:id/ai-format') && method === 'POST') {
+      const id = pathname.split('/')[3];
+      return handleAIFormat(req, id);
+    }
+
     // Note version routes (must come before generic note routes)
     if (matchPath(pathname, '/api/notes/:id/versions') && method === 'GET') {
       const id = pathname.split('/')[3];
@@ -756,6 +941,11 @@ async function handleRequest(req: Request): Promise<Response> {
     }
     if (pathname === '/api/ai/suggest' && method === 'POST') {
       return handleAISuggest(req);
+    }
+
+    // File upload route
+    if (pathname === '/api/upload' && method === 'POST') {
+      return handleUpload(req);
     }
 
     // Export route
