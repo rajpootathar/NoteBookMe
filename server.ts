@@ -701,6 +701,7 @@ async function handleUpload(req: Request): Promise<Response> {
         });
 
         const note = await createNote({
+          id: crypto.randomUUID(),
           notebookId: notebookId || undefined,
           title: parsed.title,
           content: parsed.content,

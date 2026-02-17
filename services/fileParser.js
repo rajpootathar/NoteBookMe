@@ -1,4 +1,4 @@
-import { PDFParse } from 'pdf-parse';
+import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 
 const TEXT_EXTENSIONS = new Set([
@@ -10,14 +10,21 @@ const TEXT_EXTENSIONS = new Set([
  * Handles broken lines, page artifacts, detects headings/lists.
  */
 function cleanPdfText(raw) {
-  let lines = raw.split('\n');
+  // 0. Normalize multi-space runs within lines (PDF often double-spaces words)
+  let text = raw.replace(/  +/g, ' ');
 
-  // 1. Strip common page artifacts (page numbers, headers/footers)
+  // Strip "Page N" prefixes glued to content (e.g., "Page 1Title...")
+  text = text.replace(/^Page\s*\d+/gim, '');
+
+  let lines = text.split('\n');
+
+  // 1. Strip common page artifacts
   lines = lines.filter(line => {
     const trimmed = line.trim();
+    if (!trimmed) return true; // keep blank lines for paragraph detection
     // Standalone page numbers
     if (/^\d{1,4}$/.test(trimmed)) return false;
-    // "Page X of Y" patterns
+    // "Page X of Y" or "Page X" patterns
     if (/^page\s+\d+\s*(of\s+\d+)?$/i.test(trimmed)) return false;
     // Repeated dashes/underscores (visual separators)
     if (/^[-_=]{10,}$/.test(trimmed)) return false;
@@ -27,99 +34,74 @@ function cleanPdfText(raw) {
   // 2. Merge broken lines (lines that end mid-sentence)
   const merged = [];
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
+    const trimmed = lines[i].trim();
 
     if (!trimmed) {
       merged.push('');
       continue;
     }
 
-    // Check if this line should merge with the next
     const prev = merged.length > 0 ? merged[merged.length - 1] : '';
-
-    // A line likely continues the previous if:
-    // - Previous line doesn't end with sentence-ending punctuation
-    // - Previous line isn't empty
-    // - Current line starts with lowercase
-    // - Previous line isn't a heading candidate
     const prevTrimmed = prev.trim();
+
+    // Merge if previous line doesn't end a sentence and current starts lowercase
     if (
       prevTrimmed &&
       !prevTrimmed.match(/[.!?:;]\s*$/) &&
-      !prevTrimmed.match(/^\s*$/) &&
       trimmed.match(/^[a-z]/) &&
       !isHeadingCandidate(prevTrimmed) &&
       !isListItem(trimmed) &&
       !isListItem(prevTrimmed)
     ) {
-      // Merge with previous: handle hyphenation
       if (prevTrimmed.endsWith('-')) {
         merged[merged.length - 1] = prevTrimmed.slice(0, -1) + trimmed;
       } else {
         merged[merged.length - 1] = prevTrimmed + ' ' + trimmed;
       }
     } else {
-      merged.push(line);
+      merged.push(trimmed);
     }
   }
 
   // 3. Convert to markdown structure
   const result = [];
   for (const line of merged) {
-    const trimmed = line.trim();
-
-    if (!trimmed) {
+    if (!line) {
       result.push('');
       continue;
     }
 
-    // Detect headings: short lines, all caps, or ending with no punctuation
-    if (isHeadingCandidate(trimmed)) {
-      // Determine heading level based on context
-      const level = isAllCaps(trimmed) && trimmed.length < 40 ? '##' : '###';
+    // ALL CAPS headings → markdown heading
+    if (isHeadingCandidate(line)) {
       result.push('');
-      result.push(`${level} ${toTitleCase(trimmed)}`);
+      result.push(`## ${toTitleCase(line)}`);
       result.push('');
       continue;
     }
 
-    // Detect bullet-like patterns and normalize
-    const listMatch = trimmed.match(/^[•●○▪▸►→‣⁃]\s*(.*)/);
+    // Unicode bullets → markdown list
+    const listMatch = line.match(/^[•●○▪▸►→‣⁃]\s*(.*)/);
     if (listMatch) {
       result.push(`- ${listMatch[1]}`);
       continue;
     }
 
-    // Detect numbered lists: "1." or "1)" patterns
-    const numListMatch = trimmed.match(/^(\d+)[.)]\s+(.*)/);
-    if (numListMatch) {
-      result.push(`${numListMatch[1]}. ${numListMatch[2]}`);
-      continue;
-    }
-
-    result.push(trimmed);
+    result.push(line);
   }
 
-  // 4. Clean up excessive blank lines (max 2 consecutive)
+  // 4. Clean up excessive blank lines
   let output = result.join('\n');
-  output = output.replace(/\n{4,}/g, '\n\n\n');
+  output = output.replace(/\n{3,}/g, '\n\n');
   return output.trim();
 }
 
 function isHeadingCandidate(line) {
-  // Short line (likely a title), doesn't end with comma or common sentence enders
-  // that suggest mid-paragraph, and isn't a list item
   if (line.length > 80) return false;
   if (line.length < 3) return false;
   if (isListItem(line)) return false;
-  if (line.match(/[,;]$/)) return false;
 
-  // All caps short line = almost certainly a heading
-  if (isAllCaps(line) && line.length < 60) return true;
-
-  // Short line not ending in period, with significant words
-  if (line.length < 50 && !line.match(/[.!?,;:]$/) && line.split(/\s+/).length <= 8) {
+  // Only treat ALL CAPS short lines as headings — high confidence
+  if (isAllCaps(line) && line.length < 60 && !line.match(/[,;.]$/)) {
     return true;
   }
 
@@ -151,13 +133,10 @@ export async function parseFile(buffer, filename, mimetype) {
 
   // PDF
   if (ext === '.pdf' || mimetype === 'application/pdf') {
-    const parser = new PDFParse({ data: Buffer.from(buffer) });
-    const result = await parser.getText();
-    const rawText = result.text || result.pages?.map(p => p.text).join('\n\n') || '';
-    await parser.destroy();
+    const result = await pdfParse(Buffer.from(buffer));
     return {
       title,
-      content: cleanPdfText(rawText),
+      content: cleanPdfText(result.text || ''),
       tags: ['imported', 'pdf']
     };
   }
