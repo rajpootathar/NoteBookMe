@@ -12,6 +12,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
+import TextAlign from '@tiptap/extension-text-align';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { Markdown } from 'tiptap-markdown';
 import { common, createLowlight } from 'lowlight';
@@ -52,6 +53,9 @@ onMounted(() => {
       TableRow,
       TableCell,
       TableHeader,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
       CodeBlockLowlight.configure({
         lowlight,
       }),
@@ -351,6 +355,25 @@ defineExpose({ insertMarkdown, insertText, focus, getEditor });
 
 .rich-text-editor :deep(.selectedCell) {
   background: rgba(99, 102, 241, 0.1);
+}
+
+.rich-text-editor :deep(.column-resize-handle) {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: var(--color-primary);
+  pointer-events: none;
+}
+
+.rich-text-editor :deep(.tableWrapper) {
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.rich-text-editor :deep(.resize-cursor) {
+  cursor: col-resize;
 }
 
 /* Images */

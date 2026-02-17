@@ -55,6 +55,91 @@
             </svg>
           </button>
         </div>
+
+        <template v-if="activeView === 'richedit'">
+          <div class="toolbar-divider"></div>
+
+          <!-- Alignment -->
+          <div class="toolbar-group">
+            <button @click="handleAlignLeft" title="Align Left" class="toolbar-btn" :class="{ 'is-active': richEditActive('alignLeft') }">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/>
+                <line x1="17" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/>
+              </svg>
+            </button>
+            <button @click="handleAlignCenter" title="Align Center" class="toolbar-btn" :class="{ 'is-active': richEditActive('alignCenter') }">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/>
+                <line x1="18" y1="14" x2="6" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/>
+              </svg>
+            </button>
+            <button @click="handleAlignRight" title="Align Right" class="toolbar-btn" :class="{ 'is-active': richEditActive('alignRight') }">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/>
+                <line x1="21" y1="14" x2="7" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- Table -->
+          <div class="toolbar-group">
+            <button @click="handleInsertTable" title="Insert Table" class="toolbar-btn" :class="{ 'is-active': richEditActive('table') }">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="3" y1="15" x2="21" y2="15"/>
+                <line x1="9" y1="3" x2="9" y2="21"/>
+                <line x1="15" y1="3" x2="15" y2="21"/>
+              </svg>
+            </button>
+            <template v-if="richEditActive('table')">
+              <button @click="handleAddColumnBefore" title="Add Column Before" class="toolbar-btn toolbar-btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
+                  <line x1="4" y1="12" x2="8" y2="12"/><line x1="6" y1="10" x2="6" y2="14"/>
+                </svg>
+              </button>
+              <button @click="handleAddColumnAfter" title="Add Column After" class="toolbar-btn toolbar-btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/>
+                  <line x1="16" y1="12" x2="20" y2="12"/><line x1="18" y1="10" x2="18" y2="14"/>
+                </svg>
+              </button>
+              <button @click="handleAddRowBefore" title="Add Row Before" class="toolbar-btn toolbar-btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+                  <line x1="12" y1="4" x2="12" y2="8"/><line x1="10" y1="6" x2="14" y2="6"/>
+                </svg>
+              </button>
+              <button @click="handleAddRowAfter" title="Add Row After" class="toolbar-btn toolbar-btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="15" x2="21" y2="15"/>
+                  <line x1="12" y1="16" x2="12" y2="20"/><line x1="10" y1="18" x2="14" y2="18"/>
+                </svg>
+              </button>
+              <button @click="handleDeleteColumn" title="Delete Column" class="toolbar-btn toolbar-btn-sm toolbar-btn-danger">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
+                  <line x1="4" y1="12" x2="8" y2="12"/>
+                </svg>
+              </button>
+              <button @click="handleDeleteRow" title="Delete Row" class="toolbar-btn toolbar-btn-sm toolbar-btn-danger">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+                  <line x1="10" y1="6" x2="14" y2="6"/>
+                </svg>
+              </button>
+              <button @click="handleDeleteTable" title="Delete Table" class="toolbar-btn toolbar-btn-sm toolbar-btn-danger">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+              </button>
+            </template>
+          </div>
+        </template>
       </div>
 
       <div class="toolbar-right">
@@ -219,6 +304,10 @@ function richEditActive(type) {
     case 'heading': return editor.isActive('heading');
     case 'bulletList': return editor.isActive('bulletList');
     case 'link': return editor.isActive('link');
+    case 'table': return editor.isActive('table');
+    case 'alignLeft': return editor.isActive({ textAlign: 'left' });
+    case 'alignCenter': return editor.isActive({ textAlign: 'center' });
+    case 'alignRight': return editor.isActive({ textAlign: 'right' });
     default: return false;
   }
 }
@@ -283,6 +372,58 @@ function handleToolbarCode() {
   } else {
     insertMarkdownRaw('`', '`');
   }
+}
+
+// ============ Alignment Handlers ============
+function handleAlignLeft() {
+  richEditorRef.value?.getEditor()?.chain().focus().setTextAlign('left').run();
+}
+
+function handleAlignCenter() {
+  richEditorRef.value?.getEditor()?.chain().focus().setTextAlign('center').run();
+}
+
+function handleAlignRight() {
+  richEditorRef.value?.getEditor()?.chain().focus().setTextAlign('right').run();
+}
+
+// ============ Table Handlers ============
+function handleInsertTable() {
+  const editor = richEditorRef.value?.getEditor();
+  if (!editor) return;
+  if (editor.isActive('table')) {
+    // If already in table, do nothing (context buttons handle it)
+    return;
+  }
+  editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+}
+
+function handleAddColumnBefore() {
+  richEditorRef.value?.getEditor()?.chain().focus().addColumnBefore().run();
+}
+
+function handleAddColumnAfter() {
+  richEditorRef.value?.getEditor()?.chain().focus().addColumnAfter().run();
+}
+
+function handleAddRowBefore() {
+  richEditorRef.value?.getEditor()?.chain().focus().addRowBefore().run();
+}
+
+function handleAddRowAfter() {
+  richEditorRef.value?.getEditor()?.chain().focus().addRowAfter().run();
+}
+
+function handleDeleteColumn() {
+  richEditorRef.value?.getEditor()?.chain().focus().deleteColumn().run();
+}
+
+function handleDeleteRow() {
+  richEditorRef.value?.getEditor()?.chain().focus().deleteRow().run();
+}
+
+function handleDeleteTable() {
+  richEditorRef.value?.getEditor()?.chain().focus().deleteTable().run();
 }
 
 // ============ Rich Edit Update Handler ============
@@ -828,6 +969,18 @@ watch(() => props.modelValue, () => {
   background: var(--color-primary-subtle);
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+.toolbar-btn-sm {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+.toolbar-btn-danger:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
 }
 
 /* Toolbar Layout */
