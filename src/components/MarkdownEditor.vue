@@ -3,20 +3,20 @@
     <div class="editor-toolbar">
       <div class="toolbar-left">
         <div class="toolbar-group">
-          <button @click="insertMarkdown('**', '**')" title="Bold (Ctrl+B)" class="toolbar-btn">
+          <button @click="handleToolbarBold" title="Bold (Ctrl+B)" class="toolbar-btn" :class="{ 'is-active': richEditActive('bold') }">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/>
               <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/>
             </svg>
           </button>
-          <button @click="insertMarkdown('*', '*')" title="Italic (Ctrl+I)" class="toolbar-btn">
+          <button @click="handleToolbarItalic" title="Italic (Ctrl+I)" class="toolbar-btn" :class="{ 'is-active': richEditActive('italic') }">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="19" y1="4" x2="10" y2="4"/>
               <line x1="14" y1="20" x2="5" y2="20"/>
               <line x1="15" y1="4" x2="9" y2="20"/>
             </svg>
           </button>
-          <button @click="insertMarkdown('~~', '~~')" title="Strikethrough" class="toolbar-btn">
+          <button @click="handleToolbarStrike" title="Strikethrough" class="toolbar-btn" :class="{ 'is-active': richEditActive('strike') }">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M17.3 4.9c-2.3-.6-4.4-1-6.2-.9-2.7 0-5.3.7-5.3 3.6 0 1.5 1.8 3.3 7.2 3.3s7.2 1.8 7.2 3.3c0 2.9-2.7 3.6-5.3 3.6-1.8 0-3.9-.3-6.2-.9"/>
               <line x1="4" y1="12" x2="20" y2="12"/>
@@ -27,12 +27,12 @@
         <div class="toolbar-divider"></div>
 
         <div class="toolbar-group">
-          <button @click="insertMarkdown('## ', '')" title="Heading" class="toolbar-btn">
+          <button @click="handleToolbarHeading" title="Heading" class="toolbar-btn" :class="{ 'is-active': richEditActive('heading') }">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 12h8M4 18V6M12 18V6M17 10l3 2-3 2"/>
             </svg>
           </button>
-          <button @click="insertMarkdown('- ', '')" title="Bullet List" class="toolbar-btn">
+          <button @click="handleToolbarBulletList" title="Bullet List" class="toolbar-btn" :class="{ 'is-active': richEditActive('bulletList') }">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="8" y1="6" x2="21" y2="6"/>
               <line x1="8" y1="12" x2="21" y2="12"/>
@@ -42,13 +42,13 @@
               <circle cx="4" cy="18" r="1" fill="currentColor"/>
             </svg>
           </button>
-          <button @click="insertMarkdown('[', '](url)')" title="Link" class="toolbar-btn">
+          <button @click="handleToolbarLink" title="Link" class="toolbar-btn" :class="{ 'is-active': richEditActive('link') }">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
             </svg>
           </button>
-          <button @click="insertMarkdown('`', '`')" title="Inline Code" class="toolbar-btn">
+          <button @click="handleToolbarCode" title="Inline Code" class="toolbar-btn" :class="{ 'is-active': richEditActive('code') }">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="16 18 22 12 16 6"/>
               <polyline points="8 6 2 12 8 18"/>
@@ -60,50 +60,38 @@
       <div class="toolbar-right">
         <div class="view-toggle">
           <button
-            :class="['toggle-btn', { active: activeView === 'write' }]"
-            @click="activeView = 'write'"
-            title="Write mode"
+            :class="['toggle-btn', { active: activeView === 'richedit' }]"
+            @click="switchView('richedit')"
+            title="Rich Edit mode"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
             </svg>
-            Write
+            Rich Edit
           </button>
           <button
-            :class="['toggle-btn', { active: activeView === 'preview' }]"
-            @click="activeView = 'preview'"
-            title="Preview mode"
+            :class="['toggle-btn', { active: activeView === 'markdown' }]"
+            @click="switchView('markdown')"
+            title="Markdown mode"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
+              <polyline points="16 18 22 12 16 6"/>
+              <polyline points="8 6 2 12 8 18"/>
             </svg>
-            Preview
-          </button>
-          <button
-            :class="['toggle-btn', { active: activeView === 'split' }]"
-            @click="activeView = 'split'"
-            title="Split view"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <line x1="12" y1="3" x2="12" y2="21"/>
-            </svg>
-            Split
+            Markdown
           </button>
         </div>
       </div>
     </div>
 
     <div class="editor-container" :class="[`view-${activeView}`]">
-      <!-- Editor wrapper for ghost text overlay -->
-      <div v-show="activeView !== 'preview'" class="editor-wrapper">
+      <!-- Markdown mode: textarea + ghost text + slash commands -->
+      <div v-show="activeView === 'markdown'" class="editor-wrapper">
         <textarea
           ref="textarea"
           v-model="localContent"
           @input="onInput"
           @keydown="onKeydown"
-          @scroll="onTextareaScroll"
           @blur="onBlur"
           placeholder="Start writing... Type / for commands"
           class="editor-textarea"
@@ -119,8 +107,9 @@
         </div>
       </div>
 
-      <!-- Slash command menu -->
+      <!-- Slash command menu (markdown mode only) -->
       <SlashCommandMenu
+        v-if="activeView === 'markdown'"
         ref="slashMenuRef"
         :visible="showSlashMenu"
         :position="slashMenuPosition"
@@ -129,30 +118,13 @@
         @close="closeSlashMenu"
       />
 
-      <!-- Simple divider with sync toggle -->
-      <div v-if="activeView === 'split'" class="split-divider">
-        <button
-          :class="['sync-scroll-btn', { active: syncScroll }]"
-          @click="toggleSyncAndAlign"
-          :title="syncScroll ? 'Sync scroll ON' : 'Sync scroll OFF'"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path v-if="syncScroll" d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-            <path v-if="syncScroll" d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-            <path v-if="!syncScroll" d="M18.84 5.16a4.5 4.5 0 0 0-6.36 0l-2.83 2.83"/>
-            <path v-if="!syncScroll" d="M5.16 18.84a4.5 4.5 0 0 0 6.36 0l2.83-2.83"/>
-            <line v-if="!syncScroll" x1="2" y1="2" x2="22" y2="22"/>
-          </svg>
-        </button>
-      </div>
-
-      <div
-        v-show="activeView !== 'write'"
-        ref="previewPane"
-        class="editor-preview"
-        v-html="renderedMarkdown"
-        @scroll="onPreviewScroll"
-      ></div>
+      <!-- Rich Edit mode: Tiptap WYSIWYG -->
+      <RichTextEditor
+        v-if="activeView === 'richedit'"
+        ref="richEditorRef"
+        :modelValue="localContent"
+        @update:modelValue="onRichEditUpdate"
+      />
     </div>
 
     <!-- Help Panel -->
@@ -161,26 +133,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { marked } from 'marked';
-import hljs from 'highlight.js';
-import 'highlight.js/styles/github.css';
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import SlashCommandMenu from './SlashCommandMenu.vue';
 import HelpPanel from './HelpPanel.vue';
+import RichTextEditor from './RichTextEditor.vue';
 import { suggestionService } from '../services/suggestionService.js';
-
-marked.setOptions({
-  highlight: function(code, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        return hljs.highlight(code, { language: lang }).value;
-      } catch (err) {}
-    }
-    return hljs.highlightAuto(code).value;
-  },
-  breaks: true,
-  gfm: true
-});
 
 const props = defineProps({
   modelValue: {
@@ -194,9 +151,8 @@ const emit = defineEmits(['update:modelValue']);
 // Core state
 const localContent = ref(props.modelValue);
 const textarea = ref(null);
-const previewPane = ref(null);
-const activeView = ref('write');
-const syncScroll = ref(true);
+const richEditorRef = ref(null);
+const activeView = ref(localStorage.getItem('editor-view-mode') || 'richedit');
 
 // Slash command state
 const showSlashMenu = ref(false);
@@ -233,85 +189,106 @@ onUnmounted(() => {
   suggestionService.cancelSuggestion();
 });
 
-const renderedMarkdown = computed(() => {
-  return marked(localContent.value || '');
+// ============ View Switching ============
+function switchView(view) {
+  activeView.value = view;
+  localStorage.setItem('editor-view-mode', view);
+}
+
+watch(activeView, (newView) => {
+  nextTick(() => {
+    if (newView === 'markdown' && textarea.value) {
+      textarea.value.focus();
+    } else if (newView === 'richedit' && richEditorRef.value) {
+      richEditorRef.value.focus();
+    }
+  });
 });
 
-// ============ Scroll Sync ============
-let scrollSource = null;
-let rafId = null;
+// ============ Rich Edit Active States ============
+function richEditActive(type) {
+  if (activeView.value !== 'richedit') return false;
+  const editor = richEditorRef.value?.getEditor();
+  if (!editor) return false;
 
-function onTextareaScroll() {
-  if (!syncScroll.value || activeView.value !== 'split') return;
-  if (scrollSource === 'preview') return;
-
-  scrollSource = 'textarea';
-
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = requestAnimationFrame(() => {
-    const ta = textarea.value;
-    const preview = previewPane.value;
-    if (!ta || !preview) return;
-
-    const taMaxScroll = ta.scrollHeight - ta.clientHeight;
-    if (taMaxScroll <= 0) return;
-
-    const scrollPercent = ta.scrollTop / taMaxScroll;
-    const previewMaxScroll = preview.scrollHeight - preview.clientHeight;
-
-    if (previewMaxScroll > 0) {
-      preview.scrollTop = scrollPercent * previewMaxScroll;
-    }
-
-    setTimeout(() => { scrollSource = null; }, 20);
-  });
-}
-
-function onPreviewScroll() {
-  if (!syncScroll.value || activeView.value !== 'split') return;
-  if (scrollSource === 'textarea') return;
-
-  scrollSource = 'preview';
-
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = requestAnimationFrame(() => {
-    const ta = textarea.value;
-    const preview = previewPane.value;
-    if (!ta || !preview) return;
-
-    const previewMaxScroll = preview.scrollHeight - preview.clientHeight;
-    if (previewMaxScroll <= 0) return;
-
-    const scrollPercent = preview.scrollTop / previewMaxScroll;
-    const taMaxScroll = ta.scrollHeight - ta.clientHeight;
-
-    if (taMaxScroll > 0) {
-      ta.scrollTop = scrollPercent * taMaxScroll;
-    }
-
-    setTimeout(() => { scrollSource = null; }, 20);
-  });
-}
-
-function toggleSyncAndAlign() {
-  syncScroll.value = !syncScroll.value;
-
-  if (syncScroll.value) {
-    requestAnimationFrame(() => {
-      const ta = textarea.value;
-      const preview = previewPane.value;
-      if (!ta || !preview) return;
-
-      const taMaxScroll = ta.scrollHeight - ta.clientHeight;
-      if (taMaxScroll > 0) {
-        const scrollPercent = ta.scrollTop / taMaxScroll;
-        const previewMaxScroll = preview.scrollHeight - preview.clientHeight;
-        if (previewMaxScroll > 0) {
-          preview.scrollTop = scrollPercent * previewMaxScroll;
-        }
-      }
-    });
+  switch (type) {
+    case 'bold': return editor.isActive('bold');
+    case 'italic': return editor.isActive('italic');
+    case 'strike': return editor.isActive('strike');
+    case 'code': return editor.isActive('code');
+    case 'heading': return editor.isActive('heading');
+    case 'bulletList': return editor.isActive('bulletList');
+    case 'link': return editor.isActive('link');
+    default: return false;
   }
+}
+
+// ============ Toolbar Handlers ============
+function handleToolbarBold() {
+  if (activeView.value === 'richedit') {
+    richEditorRef.value?.getEditor()?.chain().focus().toggleBold().run();
+  } else {
+    insertMarkdownRaw('**', '**');
+  }
+}
+
+function handleToolbarItalic() {
+  if (activeView.value === 'richedit') {
+    richEditorRef.value?.getEditor()?.chain().focus().toggleItalic().run();
+  } else {
+    insertMarkdownRaw('*', '*');
+  }
+}
+
+function handleToolbarStrike() {
+  if (activeView.value === 'richedit') {
+    richEditorRef.value?.getEditor()?.chain().focus().toggleStrike().run();
+  } else {
+    insertMarkdownRaw('~~', '~~');
+  }
+}
+
+function handleToolbarHeading() {
+  if (activeView.value === 'richedit') {
+    richEditorRef.value?.getEditor()?.chain().focus().toggleHeading({ level: 2 }).run();
+  } else {
+    insertMarkdownRaw('## ', '');
+  }
+}
+
+function handleToolbarBulletList() {
+  if (activeView.value === 'richedit') {
+    richEditorRef.value?.getEditor()?.chain().focus().toggleBulletList().run();
+  } else {
+    insertMarkdownRaw('- ', '');
+  }
+}
+
+function handleToolbarLink() {
+  if (activeView.value === 'richedit') {
+    const editor = richEditorRef.value?.getEditor();
+    if (!editor) return;
+    const url = prompt('Enter URL:', 'https://');
+    if (url) {
+      editor.chain().focus().setLink({ href: url }).run();
+    }
+  } else {
+    insertMarkdownRaw('[', '](url)');
+  }
+}
+
+function handleToolbarCode() {
+  if (activeView.value === 'richedit') {
+    richEditorRef.value?.getEditor()?.chain().focus().toggleCode().run();
+  } else {
+    insertMarkdownRaw('`', '`');
+  }
+}
+
+// ============ Rich Edit Update Handler ============
+function onRichEditUpdate(md) {
+  localContent.value = md;
+  emit('update:modelValue', md);
 }
 
 // ============ Input Handling ============
@@ -392,7 +369,7 @@ function onKeydown(e) {
   // Tab for indentation (when no suggestion)
   if (e.key === 'Tab' && !suggestion.value) {
     e.preventDefault();
-    insertText('  ');
+    insertTextRaw('  ');
     return;
   }
 
@@ -424,9 +401,6 @@ function checkMarkdownPrefix() {
     { pattern: /^> $/, keep: true },             // Quote
     { pattern: /^- \[ \] $/, keep: true },       // Todo
   ];
-
-  // This is handled visually in CSS - no transformation needed
-  // The preview pane shows the formatted version
 }
 
 // ============ Wrapper Shortcuts ============
@@ -584,11 +558,10 @@ function triggerSuggestion() {
   suggestionService.cancelSuggestion();
 
   if (mode === 'manual') {
-    // Don't auto-trigger in manual mode
     return;
   }
 
-  const delay = mode === 'full' ? 3000 : 6000; // Full auto: 3s, Smart: 6s (respects Gemini rate limits)
+  const delay = mode === 'full' ? 3000 : 6000;
 
   suggestionTimer = setTimeout(() => {
     requestSuggestion();
@@ -604,10 +577,7 @@ async function requestSuggestion() {
   const pos = ta.selectionStart;
   const content = localContent.value;
 
-  // Don't suggest if slash menu is open
   if (showSlashMenu.value) return;
-
-  // Don't suggest at start of document with no content
   if (!content.trim()) return;
 
   suggestionPending.value = true;
@@ -615,7 +585,6 @@ async function requestSuggestion() {
   try {
     const result = await suggestionService.getSuggestion(content, pos);
     if (result && ta.selectionStart === pos) {
-      // Only show if cursor hasn't moved
       suggestion.value = result;
       updateGhostTextPosition();
     }
@@ -654,7 +623,6 @@ function acceptWordFromSuggestion() {
   const ta = textarea.value;
   const pos = ta.selectionStart;
 
-  // Find first word boundary (space or end)
   const wordMatch = suggestion.value.match(/^\S+\s?/);
   if (!wordMatch) return;
 
@@ -687,22 +655,19 @@ function updateGhostTextPosition() {
   const style = getComputedStyle(ta);
   const paddingLeft = parseInt(style.paddingLeft) || 0;
   const paddingTop = parseInt(style.paddingTop) || 0;
-  const lineHeight = parseFloat(style.lineHeight) || 28.8; // 16px * 1.8
+  const lineHeight = parseFloat(style.lineHeight) || 28.8;
 
-  // Get text before cursor
   const textBeforeCursor = localContent.value.substring(0, ta.selectionStart);
   const lines = textBeforeCursor.split('\n');
   const currentLineIndex = lines.length - 1;
   const currentLineText = lines[currentLineIndex];
 
-  // Create a canvas to measure text width accurately
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 
   const textWidth = ctx.measureText(currentLineText).width;
 
-  // Calculate position
   const top = paddingTop + (currentLineIndex * lineHeight) - ta.scrollTop;
   const left = paddingLeft + textWidth;
 
@@ -712,9 +677,10 @@ function updateGhostTextPosition() {
   };
 }
 
-// ============ Text Manipulation ============
-function insertMarkdown(before, after) {
+// ============ Text Manipulation (internal for markdown mode) ============
+function insertMarkdownRaw(before, after) {
   const ta = textarea.value;
+  if (!ta) return;
   const start = ta.selectionStart;
   const end = ta.selectionEnd;
   const text = localContent.value;
@@ -730,7 +696,7 @@ function insertMarkdown(before, after) {
   }, 0);
 }
 
-function insertText(text) {
+function insertTextRaw(text) {
   const ta = textarea.value;
   if (!ta) return;
 
@@ -746,6 +712,23 @@ function insertText(text) {
     ta.focus();
     ta.setSelectionRange(start + text.length, start + text.length);
   }, 0);
+}
+
+// ============ Exposed API (routes to correct editor) ============
+function insertMarkdown(before, after) {
+  if (activeView.value === 'richedit' && richEditorRef.value) {
+    richEditorRef.value.insertMarkdown(before, after);
+  } else {
+    insertMarkdownRaw(before, after);
+  }
+}
+
+function insertText(text) {
+  if (activeView.value === 'richedit' && richEditorRef.value) {
+    richEditorRef.value.insertText(text);
+  } else {
+    insertTextRaw(text);
+  }
 }
 
 defineExpose({ insertMarkdown, insertText });
@@ -841,6 +824,12 @@ watch(() => props.modelValue, () => {
   box-shadow: none;
 }
 
+.toolbar-btn.is-active {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 /* Toolbar Layout */
 .toolbar-left {
   display: flex;
@@ -895,53 +884,6 @@ watch(() => props.modelValue, () => {
   color: var(--color-primary);
 }
 
-/* Split Divider */
-.split-divider {
-  position: relative;
-  width: 1px;
-  flex-shrink: 0;
-  background: var(--color-border-light);
-}
-
-/* Sync Scroll Toggle */
-.sync-scroll-btn {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  color: var(--color-text-tertiary);
-}
-
-.sync-scroll-btn:hover {
-  background: var(--color-bg-secondary);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  transform: translate(-50%, -50%) scale(1.1);
-}
-
-.sync-scroll-btn.active {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: #10b981;
-  color: #10b981;
-}
-
-.sync-scroll-btn.active:hover {
-  background: rgba(16, 185, 129, 0.2);
-}
-
 /* Editor Container */
 .editor-container {
   position: relative;
@@ -962,7 +904,7 @@ watch(() => props.modelValue, () => {
 
 .editor-textarea {
   flex: 1;
-  padding: var(--space-6);
+  padding: var(--space-4) var(--space-6);
   border: none !important;
   border-left: none !important;
   border-right: none !important;
@@ -994,7 +936,6 @@ watch(() => props.modelValue, () => {
   position: absolute;
   pointer-events: none;
   z-index: 1;
-  /* Match textarea exactly */
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
@@ -1009,168 +950,17 @@ watch(() => props.modelValue, () => {
   background: transparent;
 }
 
-/* Preview Pane */
-.editor-preview {
-  flex: 1;
-  padding: var(--space-6);
-  overflow-y: auto;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-}
-
 /* View Mode Styles */
-.view-write .editor-wrapper {
+.view-markdown .editor-wrapper {
   max-width: 100%;
   margin: 0;
 }
 
-.view-write .editor-textarea {
+.view-markdown .editor-textarea {
   max-width: 100%;
   margin: 0;
   border: none;
   padding: var(--space-4) var(--space-6);
-}
-
-.view-preview .editor-preview {
-  max-width: 100%;
-  margin: 0;
-  padding: var(--space-4) var(--space-6);
-}
-
-.view-split .editor-wrapper {
-  max-width: none;
-  margin: 0;
-}
-
-.view-split .editor-textarea {
-  border-right: none;
-  max-width: none;
-  margin: 0;
-}
-
-.view-split .editor-preview {
-  max-width: none;
-  margin: 0;
-}
-
-.editor-preview :deep(h1),
-.editor-preview :deep(h2),
-.editor-preview :deep(h3),
-.editor-preview :deep(h4) {
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  letter-spacing: -0.01em;
-}
-
-.editor-preview :deep(h1) {
-  font-size: 1.875em;
-  border-bottom: 1px solid var(--color-border-light);
-  padding-bottom: 0.3em;
-}
-
-.editor-preview :deep(h2) {
-  font-size: 1.5em;
-  border-bottom: 1px solid var(--color-border-light);
-  padding-bottom: 0.3em;
-}
-
-.editor-preview :deep(h3) {
-  font-size: 1.25em;
-}
-
-.editor-preview :deep(p) {
-  margin: 1em 0;
-  line-height: 1.7;
-  color: var(--color-text-secondary);
-}
-
-.editor-preview :deep(ul),
-.editor-preview :deep(ol) {
-  padding-left: 1.5em;
-  margin: 1em 0;
-}
-
-.editor-preview :deep(li) {
-  margin: 0.25em 0;
-  line-height: 1.6;
-  color: var(--color-text-secondary);
-}
-
-.editor-preview :deep(code) {
-  background: var(--color-primary-subtle);
-  color: var(--color-primary-dark);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: 0.875em;
-}
-
-.editor-preview :deep(pre) {
-  background: var(--color-bg-secondary);
-  padding: var(--space-4);
-  border-radius: var(--radius-md);
-  overflow-x: auto;
-  margin: 1em 0;
-  border: 1px solid var(--color-border-light);
-}
-
-.editor-preview :deep(pre code) {
-  background: none;
-  padding: 0;
-  color: var(--color-text-primary);
-}
-
-.editor-preview :deep(blockquote) {
-  border-left: 3px solid var(--color-primary);
-  padding-left: var(--space-4);
-  margin: 1em 0;
-  color: var(--color-text-tertiary);
-  font-style: italic;
-  background: var(--color-bg-secondary);
-  padding: var(--space-3) var(--space-4);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
-
-.editor-preview :deep(a) {
-  color: var(--color-primary);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.editor-preview :deep(a:hover) {
-  text-decoration: underline;
-}
-
-.editor-preview :deep(hr) {
-  border: none;
-  height: 1px;
-  background: var(--color-border);
-  margin: 2em 0;
-}
-
-.editor-preview :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-}
-
-.editor-preview :deep(th),
-.editor-preview :deep(td) {
-  border: 1px solid var(--color-border);
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-}
-
-.editor-preview :deep(th) {
-  background: var(--color-bg-secondary);
-  font-weight: 600;
-}
-
-.editor-preview :deep(img) {
-  max-width: 100%;
-  border-radius: var(--radius-md);
 }
 
 /* Mobile */
@@ -1186,10 +976,6 @@ watch(() => props.modelValue, () => {
   .editor-textarea {
     border-right: none;
     border-bottom: 1px solid var(--color-border-light);
-    min-height: 200px;
-  }
-
-  .editor-preview {
     min-height: 200px;
   }
 }
